@@ -7,8 +7,14 @@ const DEFAULT_SESSION_MAX_AGE =
   7 * 24 * 60 * 60;
 
 type StoreFleetRequestOptions = {
-  method?: "GET" | "POST";
+  method?:
+    | "GET"
+    | "POST"
+    | "PATCH"
+    | "DELETE";
+
   body?: unknown;
+
   sessionToken?: string | null;
 };
 

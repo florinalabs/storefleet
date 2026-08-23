@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
@@ -209,6 +210,7 @@ export default async function CustomerAccountPage() {
           <AccountSection
             title="Orders"
             description="View your marketplace order history and order details."
+            comingSoon
           />
 
 
@@ -217,6 +219,7 @@ export default async function CustomerAccountPage() {
           <AccountSection
             title="Addresses"
             description="Manage your saved delivery addresses for faster checkout."
+            href="/account/addresses"
           />
 
 
@@ -225,6 +228,7 @@ export default async function CustomerAccountPage() {
           <AccountSection
             title="Payment Methods"
             description="Manage saved payment options for faster and secure checkout."
+            comingSoon
           />
 
         </div>
@@ -275,35 +279,60 @@ function AccountField({
 function AccountSection({
   title,
   description,
+  href,
+  comingSoon = false,
 }: {
   title: string;
   description: string;
+  href?: string;
+  comingSoon?: boolean;
 }) {
-  return (
-    <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+  const content = (
+    <div className="flex items-start justify-between gap-4">
 
-      <div className="flex items-start justify-between gap-4">
+      <div>
 
-        <div>
-
-          <h2 className="text-lg font-bold text-zinc-950">
-            {title}
-          </h2>
+        <h2 className="text-lg font-bold text-zinc-950">
+          {title}
+        </h2>
 
 
-          <p className="mt-2 text-sm leading-6 text-zinc-500">
-            {description}
-          </p>
-
-        </div>
-
-
-        <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-500">
-          Coming soon
-        </span>
+        <p className="mt-2 text-sm leading-6 text-zinc-500">
+          {description}
+        </p>
 
       </div>
 
+
+      {comingSoon ? (
+        <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-500">
+          Coming soon
+        </span>
+      ) : (
+        <span className="shrink-0 text-lg font-bold text-violet-600">
+          →
+        </span>
+      )}
+
+    </div>
+  );
+
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+
+  return (
+    <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+      {content}
     </div>
   );
 }

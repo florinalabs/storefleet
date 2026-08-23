@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import CheckoutAddressSelector, {
+  type CheckoutAddress,
+} from "@/components/checkout/checkout-address-selector";
+
 import {
   getCustomerSessionToken,
   storefleetCustomerRequest,
@@ -20,6 +24,12 @@ type Customer = {
 type MeResponse = {
   success?: boolean;
   customer?: Customer | null;
+};
+
+
+type AddressesResponse = {
+  success?: boolean;
+  addresses?: CheckoutAddress[];
 };
 
 
@@ -55,39 +65,110 @@ export default async function CheckoutPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Validate Session
+  | Load Customer + Delivery Addresses
   |--------------------------------------------------------------------------
   */
 
-  const response =
-    await storefleetCustomerRequest(
-      "/wp-json/storefleet/v1/customers/me",
-      {
-        method: "GET",
-        sessionToken,
-      }
-    );
+  const [
+    customerResponse,
+    addressesResponse,
+  ] =
+    await Promise.all([
+      storefleetCustomerRequest(
+        "/wp-json/storefleet/v1/customers/me",
+        {
+          method: "GET",
+          sessionToken,
+        }
+      ),
+
+      storefleetCustomerRequest(
+        "/wp-json/storefleet/v1/customers/addresses",
+        {
+          method: "GET",
+          sessionToken,
+        }
+      ),
+    ]);
 
 
-  if (!response.ok) {
+  /*
+  |--------------------------------------------------------------------------
+  | Validate Customer Session
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    customerResponse.status === 401 ||
+    customerResponse.status === 403 ||
+    addressesResponse.status === 401 ||
+    addressesResponse.status === 403
+  ) {
     redirect(
       "/account/login?next=/checkout"
     );
   }
 
 
-  const payload =
-    (await response.json()) as MeResponse;
+  if (!customerResponse.ok) {
+    redirect(
+      "/account/login?next=/checkout"
+    );
+  }
+
+
+  const customerPayload =
+    (await customerResponse.json()) as MeResponse;
 
 
   const customer =
-    payload.customer;
+    customerPayload.customer;
 
 
   if (!customer) {
     redirect(
       "/account/login?next=/checkout"
     );
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Delivery Addresses
+  |--------------------------------------------------------------------------
+  */
+
+  let addresses:
+    CheckoutAddress[] =
+      [];
+
+
+  let addressLoadError =
+    false;
+
+
+  if (addressesResponse.ok) {
+    try {
+      const addressPayload =
+        (await addressesResponse.json()) as AddressesResponse;
+
+
+      addresses =
+        addressPayload.addresses ??
+        [];
+    } catch (error) {
+      console.error(
+        "StoreFleet checkout address parse error:",
+        error
+      );
+
+
+      addressLoadError =
+        true;
+    }
+  } else {
+    addressLoadError =
+      true;
   }
 
 
@@ -192,25 +273,14 @@ export default async function CheckoutPage() {
               title="Delivery Address"
             >
 
-              <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-8">
-
-                <p className="text-sm font-semibold text-zinc-900">
-                  Delivery address
-                </p>
-
-
-                <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  Customer address selection
-                  will be connected to StoreFleet
-                  address management.
-                </p>
-
-
-                <span className="mt-4 inline-flex rounded-full bg-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-600">
-                  Coming next
-                </span>
-
-              </div>
+              <CheckoutAddressSelector
+                addresses={
+                  addresses
+                }
+                loadError={
+                  addressLoadError
+                }
+              />
 
             </CheckoutSection>
 
@@ -231,7 +301,9 @@ export default async function CheckoutPage() {
 
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
                   Lalamove delivery options and
-                  quotation will appear here.
+                  quotation will appear here
+                  after the delivery address is
+                  confirmed.
                 </p>
 
 
@@ -340,8 +412,8 @@ export default async function CheckoutPage() {
 
               <p className="mt-3 text-center text-xs leading-5 text-zinc-500">
                 Order placement will be enabled
-                when checkout integration is
-                complete.
+                when delivery and payment
+                integration is complete.
               </p>
 
 
