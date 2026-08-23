@@ -1,0 +1,254 @@
+[
+  {
+    "id": 1,
+    "slug": "premium-barako-coffee-500g",
+    "name": "Premium Barako Coffee 500g",
+    "category": "Beverages",
+    "categorySlug": "beverages",
+    "price": 349,
+    "regularPrice": 399,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1447933601403-0c6688de566e?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.9,
+    "reviewCount": 128,
+    "orderCount": 842,
+    "stock": 46,
+    "store": {
+      "id": 1,
+      "name": "Batangas Coffee House",
+      "slug": "batangas-coffee-house",
+      "verified": true
+    }
+  },
+  {
+    "id": 2,
+    "slug": "fresh-cavendish-bananas-1kg",
+    "name": "Fresh Cavendish Bananas 1kg",
+    "category": "Groceries",
+    "categorySlug": "groceries",
+    "price": 129,
+    "regularPrice": 149,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.8,
+    "reviewCount": 74,
+    "orderCount": 516,
+    "stock": 82,
+    "store": {
+      "id": 2,
+      "name": "Fresh Basket Market",
+      "slug": "fresh-basket-market",
+      "verified": true
+    }
+  },
+  {
+    "id": 3,
+    "slug": "artisan-sourdough-bread",
+    "name": "Artisan Sourdough Bread",
+    "category": "Food",
+    "categorySlug": "food",
+    "price": 195,
+    "regularPrice": 195,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1585478259715-876acc5be8eb?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.7,
+    "reviewCount": 63,
+    "orderCount": 291,
+    "stock": 18,
+    "store": {
+      "id": 3,
+      "name": "Daily Bakehouse",
+      "slug": "daily-bakehouse",
+      "verified": false
+    }
+  },
+  {
+    "id": 4,
+    "slug": "organic-free-range-eggs-12pcs",
+    "name": "Organic Free Range Eggs - 12 pcs",
+    "category": "Groceries",
+    "categorySlug": "groceries",
+    "price": 229,
+    "regularPrice": 249,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1506976785307-8732e854ad03?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.9,
+    "reviewCount": 96,
+    "orderCount": 674,
+    "stock": 31,
+    "store": {
+      "id": 4,
+      "name": "Green Valley Farm",
+      "slug": "green-valley-farm",
+      "verified": true
+    }
+  },
+  {
+    "id": 5,
+    "slug": "pure-calamansi-juice-1l",
+    "name": "Pure Calamansi Juice 1L",
+    "category": "Beverages",
+    "categorySlug": "beverages",
+    "price": 169,
+    "regularPrice": 189,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1621263764928-df1444c5e859?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.6,
+    "reviewCount": 42,
+    "orderCount": 208,
+    "stock": 55,
+    "store": {
+      "id": 5,
+      "name": "Local Squeeze",
+      "slug": "local-squeeze",
+      "verified": false
+    }
+  },
+  {
+    "id": 6,
+    "slug": "raw-wildflower-honey-350ml",
+    "name": "Raw Wildflower Honey 350ml",
+    "category": "Health",
+    "categorySlug": "health",
+    "price": 289,
+    "regularPrice": 329,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.9,
+    "reviewCount": 156,
+    "orderCount": 936,
+    "stock": 24,
+    "store": {
+      "id": 6,
+      "name": "Bee Local PH",
+      "slug": "bee-local-ph",
+      "verified": true
+    }
+  },
+  {
+    "id": 7,
+    "slug": "homemade-chili-garlic-oil",
+    "name": "Homemade Chili Garlic Oil",
+    "category": "Food",
+    "categorySlug": "food",
+    "price": 149,
+    "regularPrice": 169,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1585325701165-351af916e581?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.8,
+    "reviewCount": 89,
+    "orderCount": 603,
+    "stock": 64,
+    "store": {
+      "id": 7,
+      "name": "Nanay's Kitchen",
+      "slug": "nanays-kitchen",
+      "verified": false
+    }
+  },
+  {
+    "id": 8,
+    "slug": "native-coconut-oil-500ml",
+    "name": "Native Coconut Oil 500ml",
+    "category": "Health",
+    "categorySlug": "health",
+    "price": 259,
+    "regularPrice": 299,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1598511757337-fe2cafc31ba0?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.7,
+    "reviewCount": 51,
+    "orderCount": 337,
+    "stock": 29,
+    "store": {
+      "id": 8,
+      "name": "Island Naturals",
+      "slug": "island-naturals",
+      "verified": true
+    }
+  },
+  {
+    "id": 9,
+    "slug": "premium-jasmine-rice-5kg",
+    "name": "Premium Jasmine Rice 5kg",
+    "category": "Groceries",
+    "categorySlug": "groceries",
+    "price": 449,
+    "regularPrice": 479,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.8,
+    "reviewCount": 214,
+    "orderCount": 1258,
+    "stock": 93,
+    "store": {
+      "id": 9,
+      "name": "Bayanihan Grocery",
+      "slug": "bayanihan-grocery",
+      "verified": true
+    }
+  },
+  {
+    "id": 10,
+    "slug": "handmade-oatmeal-soap",
+    "name": "Handmade Oatmeal Soap",
+    "category": "Health",
+    "categorySlug": "health",
+    "price": 119,
+    "regularPrice": 139,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1600857544200-b2f666a9a2ec?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.6,
+    "reviewCount": 38,
+    "orderCount": 174,
+    "stock": 37,
+    "store": {
+      "id": 10,
+      "name": "Natural Home PH",
+      "slug": "natural-home-ph",
+      "verified": false
+    }
+  },
+  {
+    "id": 11,
+    "slug": "fresh-strawberries-250g",
+    "name": "Fresh Strawberries 250g",
+    "category": "Groceries",
+    "categorySlug": "groceries",
+    "price": 199,
+    "regularPrice": 229,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.7,
+    "reviewCount": 67,
+    "orderCount": 388,
+    "stock": 16,
+    "store": {
+      "id": 11,
+      "name": "Highland Produce",
+      "slug": "highland-produce",
+      "verified": true
+    }
+  },
+  {
+    "id": 12,
+    "slug": "dark-chocolate-cookies-12pcs",
+    "name": "Dark Chocolate Cookies - 12 pcs",
+    "category": "Food",
+    "categorySlug": "food",
+    "price": 249,
+    "regularPrice": 279,
+    "currency": "PHP",
+    "image": "https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=900&q=80",
+    "rating": 4.9,
+    "reviewCount": 143,
+    "orderCount": 782,
+    "stock": 27,
+    "store": {
+      "id": 12,
+      "name": "Cookie District",
+      "slug": "cookie-district",
+      "verified": true
+    }
+  }
+]
