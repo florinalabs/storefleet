@@ -21,7 +21,7 @@ export default function CartPage() {
 
   if (!hydrated) {
     return (
-      <main className="min-h-[60vh] bg-zinc-50">
+      <section className="min-h-[60vh] bg-zinc-50">
 
         <div className="mx-auto max-w-7xl px-5 py-16 sm:px-6 lg:px-8">
 
@@ -31,7 +31,7 @@ export default function CartPage() {
 
         </div>
 
-      </main>
+      </section>
     );
   }
 
@@ -44,7 +44,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <main className="min-h-[70vh] bg-zinc-50">
+      <section className="min-h-[70vh] bg-zinc-50">
 
         <div className="mx-auto flex max-w-2xl flex-col items-center px-5 py-24 text-center sm:px-6">
 
@@ -79,7 +79,7 @@ export default function CartPage() {
 
         </div>
 
-      </main>
+      </section>
     );
   }
 
@@ -89,7 +89,7 @@ export default function CartPage() {
 
 
   return (
-    <main className="bg-zinc-50">
+    <section className="bg-zinc-50">
 
       {/* Header */}
 
@@ -234,12 +234,14 @@ export default function CartPage() {
               </div>
 
 
-              <button
-                type="button"
-                className="mt-7 min-h-13 w-full rounded-full bg-violet-600 px-6 font-bold text-white transition hover:bg-violet-700"
+              {/* Protected Checkout */}
+
+              <Link
+                href="/checkout"
+                className="mt-7 flex min-h-13 w-full items-center justify-center rounded-full bg-violet-600 px-6 font-bold text-white transition hover:bg-violet-700"
               >
                 Proceed to Checkout
-              </button>
+              </Link>
 
 
               <Link
@@ -257,7 +259,7 @@ export default function CartPage() {
 
       </section>
 
-    </main>
+    </section>
   );
 }
 
