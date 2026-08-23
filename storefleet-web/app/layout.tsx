@@ -82,9 +82,21 @@ export default function RootLayout({
 
               <div className="ml-auto flex items-center gap-3 lg:ml-4">
 
+                {/* Customer Registration */}
+
+                <Link
+                  href="/account/register"
+                  className="hidden text-sm font-semibold transition hover:text-violet-600 sm:inline"
+                >
+                  Create Account
+                </Link>
+
+
+                {/* Merchant Login */}
+
                 <Link
                   href="/merchant/login"
-                  className="hidden text-sm font-semibold transition hover:text-violet-600 sm:inline"
+                  className="hidden text-sm font-semibold transition hover:text-violet-600 md:inline"
                 >
                   Merchant Login
                 </Link>
@@ -150,6 +162,10 @@ export default function RootLayout({
                   {
                     label: "Cart",
                     href: "/cart",
+                  },
+                  {
+                    label: "Create Account",
+                    href: "/account/register",
                   },
                 ]}
               />
