@@ -1,0 +1,279 @@
+/*
+|--------------------------------------------------------------------------
+| StoreFleet Vendor Dashboard
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-dashboard-page {
+    box-sizing: border-box;
+    margin-left: 236px;
+    padding: 32px 40px 60px;
+    width: auto;
+    min-height: 100vh;
+    background: #f7f7f8;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Page Header
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-page-header {
+    margin-bottom: 28px;
+}
+
+.storefleet-page-header h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 600;
+}
+
+.storefleet-page-header p {
+    margin: 0;
+    color: #666;
+    font-size: 15px;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Cards
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-card {
+    margin-bottom: 24px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.storefleet-card-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fafafa;
+}
+
+.storefleet-card-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.storefleet-card-body {
+    padding: 22px;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Branch Table
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.storefleet-table th,
+.storefleet-table td {
+    padding: 14px 12px;
+    text-align: left;
+    border-bottom: 1px solid #ececec;
+    vertical-align: top;
+}
+
+.storefleet-table th {
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    background: #fafafa;
+}
+
+.storefleet-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Status Badge
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-status {
+    display: inline-block;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.storefleet-status-active {
+    background: #e9f7ef;
+    color: #18794e;
+}
+
+.storefleet-status-inactive {
+    background: #eeeeee;
+    color: #666666;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Form
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 22px;
+}
+
+.storefleet-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.storefleet-form-group-full {
+    grid-column: 1 / -1;
+}
+
+.storefleet-form-group label {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.storefleet-form-control {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid #d7d7d7;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 14px;
+}
+
+.storefleet-form-control:focus {
+    outline: none;
+    border-color: #7047eb;
+    box-shadow: 0 0 0 2px rgba(112, 71, 235, 0.12);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Button
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 9px 18px;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #7047eb;
+    color: #fff;
+    font-weight: 600;
+}
+
+.storefleet-button:hover {
+    opacity: 0.92;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Notices
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-notice {
+    margin-bottom: 20px;
+    padding: 14px 16px;
+    border-radius: 6px;
+}
+
+.storefleet-notice-success {
+    background: #e9f7ef;
+    color: #18794e;
+}
+
+.storefleet-notice-error {
+    background: #fdecec;
+    color: #b42318;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Responsive
+|--------------------------------------------------------------------------
+*/
+
+@media (max-width: 1024px) {
+
+    .storefleet-dashboard-page {
+        margin-left: 0;
+        padding: 24px;
+    }
+
+    .storefleet-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Staff Branch Selection
+|--------------------------------------------------------------------------
+*/
+
+.storefleet-checkbox-list {
+    display: grid;
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(180px, 1fr)
+        );
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.storefleet-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    background: #ffffff;
+    cursor: pointer;
+}
+
+.storefleet-checkbox-item input {
+    margin: 0;
+}
+
+.storefleet-help {
+    display: block;
+    margin-top: 5px;
+    color: #777;
+    font-size: 12px;
+}
