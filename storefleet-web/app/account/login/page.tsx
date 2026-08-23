@@ -24,6 +24,39 @@ type LoginResponse = {
 };
 
 
+/*
+|--------------------------------------------------------------------------
+| Safe Redirect
+|--------------------------------------------------------------------------
+|
+| Only allow internal StoreFleet paths.
+|
+| Allowed:
+| /checkout
+| /account
+| /shop
+|
+| Rejected:
+| https://example.com
+| //example.com
+|
+*/
+
+function getSafeNextPath(
+  value: string | null
+): string {
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//")
+  ) {
+    return "/shop";
+  }
+
+  return value;
+}
+
+
 export default function CustomerLoginPage() {
   const router = useRouter();
 
@@ -133,13 +166,29 @@ export default function CustomerLoginPage() {
       | Login Successful
       |--------------------------------------------------------------------------
       |
-      | /api/account/login stores the StoreFleet session in an HttpOnly
-      | cookie. The raw customer session token never needs to be stored
-      | in browser JavaScript.
+      | /api/account/login stores the customer session in an HttpOnly
+      | cookie.
+      |
+      | If the customer was redirected here from a protected page such
+      | as /checkout, send them back there after authentication.
+      |
+      | Otherwise use /shop as the normal login destination.
       |
       */
 
-      router.push("/shop");
+      const searchParams =
+        new URLSearchParams(
+          window.location.search
+        );
+
+
+      const nextPath =
+        getSafeNextPath(
+          searchParams.get("next")
+        );
+
+
+      router.push(nextPath);
 
       router.refresh();
     } catch (error) {
