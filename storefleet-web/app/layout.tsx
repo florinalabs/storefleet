@@ -6,6 +6,7 @@ import {
   CartProvider,
 } from "@/components/cart/cart-provider";
 
+import CustomerAccountActions from "@/components/account/customer-account-actions";
 import CartLink from "@/components/cart/cart-link";
 
 import "./globals.css";
@@ -38,19 +39,19 @@ export default function RootLayout({
 
           <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/95 backdrop-blur">
 
-            <div className="mx-auto flex min-h-[72px] w-full max-w-7xl items-center gap-8 px-5 sm:px-6 lg:px-8">
+            <div className="mx-auto flex min-h-[72px] w-full max-w-7xl items-center px-5 sm:px-6 lg:px-8">
 
               {/* Logo */}
 
               <Link
                 href="/"
-                className="text-2xl font-black tracking-[-0.05em]"
+                className="shrink-0 text-2xl font-black tracking-[-0.05em]"
               >
                 StoreFleet
               </Link>
 
 
-              {/* Marketplace Navigation */}
+              {/* Desktop Navigation */}
 
               <nav className="ml-auto hidden items-center gap-8 text-sm font-medium lg:flex">
 
@@ -61,6 +62,7 @@ export default function RootLayout({
                   Shop
                 </Link>
 
+
                 <Link
                   href="/stores"
                   className="transition hover:text-violet-600"
@@ -68,41 +70,33 @@ export default function RootLayout({
                   Stores
                 </Link>
 
-                <Link
-                  href="/merchant/register"
-                  className="transition hover:text-violet-600"
-                >
-                  Become a Merchant
-                </Link>
+
+                {/*
+                |--------------------------------------------------------------------------
+                | Dynamic Account Navigation
+                |--------------------------------------------------------------------------
+                |
+                | Logged out:
+                | For Merchants | Sign In
+                |
+                | Logged in:
+                | Account | Logout
+                |
+                */}
+
+                <CustomerAccountActions />
+
+
+                {/* Cart */}
+
+                <CartLink />
 
               </nav>
 
 
-              {/* Account Actions */}
+              {/* Small Screen Cart */}
 
-              <div className="ml-auto flex items-center gap-3 lg:ml-4">
-
-                {/* Customer Registration */}
-
-                <Link
-                  href="/account/register"
-                  className="hidden text-sm font-semibold transition hover:text-violet-600 sm:inline"
-                >
-                  Create Account
-                </Link>
-
-
-                {/* Merchant Login */}
-
-                <Link
-                  href="/merchant/login"
-                  className="hidden text-sm font-semibold transition hover:text-violet-600 md:inline"
-                >
-                  Merchant Login
-                </Link>
-
-
-                {/* Live Cart */}
+              <div className="ml-auto flex items-center lg:hidden">
 
                 <CartLink />
 
@@ -163,9 +157,22 @@ export default function RootLayout({
                     label: "Cart",
                     href: "/cart",
                   },
+                ]}
+              />
+
+
+              {/* Customers */}
+
+              <FooterColumn
+                title="Customers"
+                links={[
                   {
                     label: "Create Account",
                     href: "/account/register",
+                  },
+                  {
+                    label: "Sign In",
+                    href: "/account/login",
                   },
                 ]}
               />
@@ -183,23 +190,6 @@ export default function RootLayout({
                   {
                     label: "Merchant Login",
                     href: "/merchant/login",
-                  },
-                ]}
-              />
-
-
-              {/* StoreFleet */}
-
-              <FooterColumn
-                title="StoreFleet"
-                links={[
-                  {
-                    label: "About",
-                    href: "/about",
-                  },
-                  {
-                    label: "Contact",
-                    href: "/contact",
                   },
                 ]}
               />
