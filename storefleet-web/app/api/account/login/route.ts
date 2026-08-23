@@ -27,17 +27,71 @@ export async function POST(
     const body =
       (await request.json()) as LoginPayload;
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Request
+    |--------------------------------------------------------------------------
+    */
+
+    const email =
+      body.email?.trim() ?? "";
+
+    const password =
+      body.password ?? "";
+
+    const remember =
+      body.remember === true;
+
+
+    if (!email || !password) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Email and password are required.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | WordPress Login
+    |--------------------------------------------------------------------------
+    |
+    | StoreFleet's WordPress endpoint accepts either an email address or a
+    | username through the "login" field.
+    |
+    */
+
     const response =
       await storefleetCustomerRequest(
         "/wp-json/storefleet/v1/customers/login",
         {
           method: "POST",
-          body,
+
+          body: {
+            login: email,
+            password,
+            remember,
+          },
         }
       );
 
+
     const payload =
       await response.json();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Login Failed
+    |--------------------------------------------------------------------------
+    */
 
     if (!response.ok) {
       return NextResponse.json(
@@ -48,13 +102,22 @@ export async function POST(
       );
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Extract Session
+    |--------------------------------------------------------------------------
+    */
+
     const session =
       extractSession(payload);
+
 
     if (!session) {
       console.error(
         "StoreFleet login succeeded but no customer session was returned."
       );
+
 
       return NextResponse.json(
         {
@@ -68,9 +131,23 @@ export async function POST(
       );
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Store HttpOnly Session
+    |--------------------------------------------------------------------------
+    */
+
     await setCustomerSessionCookie(
       session
     );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Safe Browser Response
+    |--------------------------------------------------------------------------
+    */
 
     return NextResponse.json(
       {
@@ -87,6 +164,7 @@ export async function POST(
       "StoreFleet customer login proxy error:",
       error
     );
+
 
     return NextResponse.json(
       {
