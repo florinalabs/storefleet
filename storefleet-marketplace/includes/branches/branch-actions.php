@@ -20,7 +20,7 @@ add_action(
 function storefleet_handle_branch_actions()
 {
     global $wp;
-    global $wpdb;
+
 
     /*
     |--------------------------------------------------------------------------
@@ -31,8 +31,7 @@ function storefleet_handle_branch_actions()
     if (
         !function_exists(
             'dokan_is_seller_dashboard'
-        )
-        ||
+        ) ||
         !dokan_is_seller_dashboard()
     ) {
         return;
@@ -64,8 +63,9 @@ function storefleet_handle_branch_actions()
 
     if (
         strtoupper(
-            $_SERVER['REQUEST_METHOD']
-            ?? ''
+            $_SERVER[
+                'REQUEST_METHOD'
+            ] ?? ''
         ) !== 'POST'
     ) {
         return;
@@ -78,8 +78,9 @@ function storefleet_handle_branch_actions()
     |--------------------------------------------------------------------------
     */
 
-    if (!storefleet_is_merchant_owner()) {
-
+    if (
+        !storefleet_is_merchant_owner()
+    ) {
         wp_die(
             esc_html__(
                 'You are not authorized to manage branches.',
@@ -123,7 +124,6 @@ function storefleet_handle_branch_actions()
     */
 
     if ($action === 'create') {
-
         storefleet_create_branch_action();
 
         return;
@@ -141,6 +141,7 @@ function storefleet_create_branch_action()
 {
     global $wpdb;
 
+
     check_admin_referer(
         'storefleet_create_branch',
         'storefleet_branch_nonce'
@@ -152,7 +153,6 @@ function storefleet_create_branch_action()
 
 
     if (!$merchant_id) {
-
         wp_die(
             esc_html__(
                 'Merchant account not found.',
@@ -169,7 +169,9 @@ function storefleet_create_branch_action()
     */
 
     $name =
-        isset($_POST['branch_name'])
+        isset(
+            $_POST['branch_name']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['branch_name']
@@ -179,7 +181,6 @@ function storefleet_create_branch_action()
 
 
     if ($name === '') {
-
         storefleet_redirect_branches(
             'missing-name'
         );
@@ -193,7 +194,9 @@ function storefleet_create_branch_action()
     */
 
     $address_line_1 =
-        isset($_POST['address_line_1'])
+        isset(
+            $_POST['address_line_1']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['address_line_1']
@@ -203,7 +206,9 @@ function storefleet_create_branch_action()
 
 
     $address_line_2 =
-        isset($_POST['address_line_2'])
+        isset(
+            $_POST['address_line_2']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['address_line_2']
@@ -213,7 +218,9 @@ function storefleet_create_branch_action()
 
 
     $city =
-        isset($_POST['city'])
+        isset(
+            $_POST['city']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['city']
@@ -223,7 +230,9 @@ function storefleet_create_branch_action()
 
 
     $state =
-        isset($_POST['state'])
+        isset(
+            $_POST['state']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['state']
@@ -233,7 +242,9 @@ function storefleet_create_branch_action()
 
 
     $postcode =
-        isset($_POST['postcode'])
+        isset(
+            $_POST['postcode']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['postcode']
@@ -244,12 +255,31 @@ function storefleet_create_branch_action()
 
     /*
     |--------------------------------------------------------------------------
+    | Required Address Fields
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $address_line_1 === '' ||
+        $city === '' ||
+        $state === ''
+    ) {
+        storefleet_redirect_branches(
+            'missing-address'
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
     | Pickup Contact
     |--------------------------------------------------------------------------
     */
 
     $contact_name =
-        isset($_POST['contact_name'])
+        isset(
+            $_POST['contact_name']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['contact_name']
@@ -259,7 +289,9 @@ function storefleet_create_branch_action()
 
 
     $contact_phone =
-        isset($_POST['contact_phone'])
+        isset(
+            $_POST['contact_phone']
+        )
             ? sanitize_text_field(
                 wp_unslash(
                     $_POST['contact_phone']
@@ -270,54 +302,65 @@ function storefleet_create_branch_action()
 
     /*
     |--------------------------------------------------------------------------
-    | Coordinates
+    | Automatic Geocoding
     |--------------------------------------------------------------------------
+    |
+    | Latitude and longitude are never trusted from merchant form input.
+    |
     */
 
-    $latitude = null;
+    $coordinates =
+        storefleet_geocode_branch_address(
+            array(
+                'address_line_1' =>
+                    $address_line_1,
+
+                'address_line_2' =>
+                    $address_line_2,
+
+                'city' =>
+                    $city,
+
+                'state' =>
+                    $state,
+
+                'postcode' =>
+                    $postcode,
+
+                'country' =>
+                    'Philippines',
+            )
+        );
+
 
     if (
-        isset($_POST['latitude'])
-        &&
-        $_POST['latitude'] !== ''
+        is_wp_error(
+            $coordinates
+        )
     ) {
+        error_log(
+            sprintf(
+                'StoreFleet branch geocoding failed for merchant #%d: %s',
+                $merchant_id,
+                $coordinates->get_error_message()
+            )
+        );
 
-        $latitude =
-            (float) wp_unslash(
-                $_POST['latitude']
-            );
 
-        if (
-            $latitude < -90
-            ||
-            $latitude > 90
-        ) {
-            $latitude = null;
-        }
+        storefleet_redirect_branches(
+            'geocode-failed'
+        );
     }
 
 
-    $longitude = null;
+    $latitude =
+        (float)
+        $coordinates['latitude'];
 
-    if (
-        isset($_POST['longitude'])
-        &&
-        $_POST['longitude'] !== ''
-    ) {
 
-        $longitude =
-            (float) wp_unslash(
-                $_POST['longitude']
-            );
-
-        if (
-            $longitude < -180
-            ||
-            $longitude > 180
-        ) {
-            $longitude = null;
-        }
-    }
+    $longitude =
+        (float)
+        $coordinates['longitude'];
 
 
     /*
@@ -327,7 +370,9 @@ function storefleet_create_branch_action()
     */
 
     $is_active =
-        isset($_POST['is_active'])
+        isset(
+            $_POST['is_active']
+        )
             ? 1
             : 0;
 
@@ -354,14 +399,17 @@ function storefleet_create_branch_action()
     $table =
         storefleet_branches_table();
 
+
     $now =
-        current_time('mysql');
+        current_time(
+            'mysql'
+        );
 
 
     $result =
         $wpdb->insert(
             $table,
-            [
+            array(
                 'merchant_id' =>
                     $merchant_id,
 
@@ -409,16 +457,34 @@ function storefleet_create_branch_action()
 
                 'updated_at' =>
                     $now,
-            ]
+            ),
+            array(
+                '%d',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%s',
+                '%f',
+                '%f',
+                '%s',
+                '%s',
+                '%d',
+                '%s',
+                '%s',
+            )
         );
 
 
     if ($result === false) {
-
         error_log(
             'StoreFleet branch insert error: ' .
             $wpdb->last_error
         );
+
 
         storefleet_redirect_branches(
             'branch-error'
@@ -446,17 +512,23 @@ function storefleet_redirect_branches(
             'storefleet-branches'
         );
 
-    if ($notice !== '') {
 
+    if ($notice !== '') {
         $url =
             add_query_arg(
                 'sf_notice',
-                sanitize_key($notice),
+                sanitize_key(
+                    $notice
+                ),
                 $url
             );
     }
 
-    wp_safe_redirect($url);
+
+    wp_safe_redirect(
+        $url
+    );
+
 
     exit;
 }
