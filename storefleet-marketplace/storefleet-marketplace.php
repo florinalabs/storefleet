@@ -149,6 +149,9 @@ require_once STOREFLEET_PATH .
 
 require_once STOREFLEET_PATH .
     'includes/staff/staff-helpers.php';
+    
+require_once STOREFLEET_PATH .
+    'includes/staff/staff-portal.php';
 
 require_once STOREFLEET_PATH .
     'includes/staff/staff-actions.php';
