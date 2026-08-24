@@ -4,13 +4,22 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| Install / Upgrade StoreFleet Database
+|--------------------------------------------------------------------------
+*/
+
 function storefleet_install_database()
 {
     global $wpdb;
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-    $charset_collate = $wpdb->get_charset_collate();
+    $charset_collate =
+        $wpdb->get_charset_collate();
+
 
     /*
     |--------------------------------------------------------------------------
@@ -18,7 +27,8 @@ function storefleet_install_database()
     |--------------------------------------------------------------------------
     */
 
-    $branches_table = storefleet_branches_table();
+    $branches_table =
+        storefleet_branches_table();
 
     $branches_sql = "
         CREATE TABLE {$branches_table} (
@@ -57,13 +67,22 @@ function storefleet_install_database()
         ) {$charset_collate};
     ";
 
+
     /*
     |--------------------------------------------------------------------------
     | Staff
     |--------------------------------------------------------------------------
+    |
+    | staff_role remains temporarily for backward compatibility.
+    |
+    | New multi-role assignments are stored in:
+    |
+    | wp_storefleet_staff_roles
+    |
     */
 
-    $staff_table = storefleet_staff_table();
+    $staff_table =
+        storefleet_staff_table();
 
     $staff_sql = "
         CREATE TABLE {$staff_table} (
@@ -90,10 +109,25 @@ function storefleet_install_database()
         ) {$charset_collate};
     ";
 
+
     /*
     |--------------------------------------------------------------------------
-    | Staff Branch Assignments
+    | Legacy Staff Branch Assignments
     |--------------------------------------------------------------------------
+    |
+    | Keep this table during the migration period.
+    |
+    | Existing staff currently use:
+    |
+    | staff
+    |   └── branches
+    |
+    | The new model uses:
+    |
+    | staff
+    |   └── role
+    |       └── branches
+    |
     */
 
     $staff_branches_table =
@@ -117,6 +151,103 @@ function storefleet_install_database()
             )
         ) {$charset_collate};
     ";
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Staff Role Assignments
+    |--------------------------------------------------------------------------
+    |
+    | One staff member may now have multiple operational roles.
+    |
+    | Example:
+    |
+    | Staff #10
+    |   - cashier
+    |   - inventory_staff
+    |   - order_staff
+    |
+    | scope_type:
+    |
+    | selected_branches
+    | all_branches
+    |
+    */
+
+    $staff_roles_table =
+        storefleet_staff_roles_table();
+
+    $staff_roles_sql = "
+        CREATE TABLE {$staff_roles_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+
+            staff_id BIGINT UNSIGNED NOT NULL,
+
+            role_key VARCHAR(50) NOT NULL,
+
+            scope_type VARCHAR(30)
+                NOT NULL
+                DEFAULT 'selected_branches',
+
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+
+            PRIMARY KEY (id),
+
+            KEY staff_id (staff_id),
+            KEY role_key (role_key),
+            KEY scope_type (scope_type),
+
+            UNIQUE KEY staff_role (
+                staff_id,
+                role_key
+            )
+        ) {$charset_collate};
+    ";
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Staff Role Branch Assignments
+    |--------------------------------------------------------------------------
+    |
+    | Branch permissions belong to a specific staff role.
+    |
+    | Example:
+    |
+    | Cashier
+    |   - Makati
+    |   - BGC
+    |
+    | Delivery Staff
+    |   - Makati
+    |
+    */
+
+    $staff_role_branches_table =
+        storefleet_staff_role_branches_table();
+
+    $staff_role_branches_sql = "
+        CREATE TABLE {$staff_role_branches_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+
+            staff_role_id BIGINT UNSIGNED NOT NULL,
+            branch_id BIGINT UNSIGNED NOT NULL,
+
+            created_at DATETIME NOT NULL,
+
+            PRIMARY KEY (id),
+
+            KEY staff_role_id (staff_role_id),
+            KEY branch_id (branch_id),
+
+            UNIQUE KEY staff_role_branch (
+                staff_role_id,
+                branch_id
+            )
+        ) {$charset_collate};
+    ";
+
 
     /*
     |--------------------------------------------------------------------------
@@ -157,13 +288,232 @@ function storefleet_install_database()
         ) {$charset_collate};
     ";
 
-    dbDelta($branches_sql);
-    dbDelta($staff_sql);
-    dbDelta($staff_branches_sql);
-    dbDelta($inventory_sql);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create / Upgrade Tables
+    |--------------------------------------------------------------------------
+    */
+
+    dbDelta(
+        $branches_sql
+    );
+
+    dbDelta(
+        $staff_sql
+    );
+
+    dbDelta(
+        $staff_branches_sql
+    );
+
+    dbDelta(
+        $staff_roles_sql
+    );
+
+    dbDelta(
+        $staff_role_branches_sql
+    );
+
+    dbDelta(
+        $inventory_sql
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Migrate Legacy Staff Roles
+    |--------------------------------------------------------------------------
+    |
+    | Existing:
+    |
+    | wp_storefleet_staff.staff_role
+    |
+    | Becomes:
+    |
+    | wp_storefleet_staff_roles.role_key
+    |
+    | INSERT IGNORE makes this safe to run multiple times.
+    |
+    */
+
+    storefleet_migrate_legacy_staff_roles();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Database Version
+    |--------------------------------------------------------------------------
+    */
 
     update_option(
         'storefleet_db_version',
         STOREFLEET_DB_VERSION
     );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Migrate Existing Staff To Multi-Role Model
+|--------------------------------------------------------------------------
+|
+| This migration is intentionally idempotent.
+|
+| Running it repeatedly will not duplicate roles or branch assignments.
+|
+*/
+
+function storefleet_migrate_legacy_staff_roles()
+{
+    global $wpdb;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tables
+    |--------------------------------------------------------------------------
+    */
+
+    $staff_table =
+        storefleet_staff_table();
+
+    $legacy_branches_table =
+        storefleet_staff_branches_table();
+
+    $roles_table =
+        storefleet_staff_roles_table();
+
+    $role_branches_table =
+        storefleet_staff_role_branches_table();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Safety
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !storefleet_database_table_exists(
+            $staff_table
+        )
+        ||
+        !storefleet_database_table_exists(
+            $roles_table
+        )
+        ||
+        !storefleet_database_table_exists(
+            $role_branches_table
+        )
+    ) {
+        return false;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | 1. Migrate Legacy Role
+    |--------------------------------------------------------------------------
+    |
+    | Example:
+    |
+    | staff_id = 1
+    | staff_role = delivery_staff
+    |
+    | becomes:
+    |
+    | staff_roles
+    | staff_id = 1
+    | role_key = delivery_staff
+    |
+    */
+
+    $wpdb->query(
+        "
+        INSERT IGNORE INTO {$roles_table}
+        (
+            staff_id,
+            role_key,
+            scope_type,
+            created_at,
+            updated_at
+        )
+
+        SELECT
+            s.id,
+            s.staff_role,
+            'selected_branches',
+            NOW(),
+            NOW()
+
+        FROM {$staff_table} s
+
+        WHERE
+            s.staff_role IS NOT NULL
+            AND s.staff_role <> ''
+        "
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | 2. Migrate Legacy Branch Assignments
+    |--------------------------------------------------------------------------
+    |
+    | Existing:
+    |
+    | staff_id → branch_id
+    |
+    | becomes:
+    |
+    | staff_role_id → branch_id
+    |
+    | The branch is assigned to the staff member's original legacy role.
+    |
+    */
+
+    if (
+        storefleet_database_table_exists(
+            $legacy_branches_table
+        )
+    ) {
+        $wpdb->query(
+            "
+            INSERT IGNORE INTO {$role_branches_table}
+            (
+                staff_role_id,
+                branch_id,
+                created_at
+            )
+
+            SELECT
+                sr.id,
+                sb.branch_id,
+                NOW()
+
+            FROM {$legacy_branches_table} sb
+
+            INNER JOIN {$staff_table} s
+                ON s.id = sb.staff_id
+
+            INNER JOIN {$roles_table} sr
+                ON sr.staff_id = s.id
+                AND sr.role_key = s.staff_role
+
+            WHERE
+                s.staff_role IS NOT NULL
+                AND s.staff_role <> ''
+            "
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Migration Complete
+    |--------------------------------------------------------------------------
+    */
+
+    return true;
 }
