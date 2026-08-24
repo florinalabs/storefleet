@@ -113,6 +113,9 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/api/customer-addresses.php';
 
+require_once STOREFLEET_PATH .
+    'includes/api/customer-orders.php';
+
     /*
 |--------------------------------------------------------------------------
 | Compatibility
