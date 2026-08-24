@@ -122,6 +122,9 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/compatibility/dokan-woocommerce-analytics.php';
 
+require_once STOREFLEET_PATH .
+    'includes/compatibility/dokan-product-publishing.php';
+
 /*
 |--------------------------------------------------------------------------
 | Branches
