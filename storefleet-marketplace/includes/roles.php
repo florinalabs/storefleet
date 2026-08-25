@@ -89,11 +89,8 @@ function storefleet_get_staff_roles()
 |
 | IMPORTANT:
 |
-| Branch assignment is NOT represented by:
-|
-|   branches.view
-|
-| anymore.
+| Branch assignment is NOT represented by a generic branches.view
+| permission.
 |
 | Staff choose their current operational branch using the global branch
 | selector.
@@ -111,7 +108,7 @@ function storefleet_get_staff_roles()
 |
 | products.create
 |
-|     Create new merchant products.
+|     Create merchant products.
 |
 | products.edit
 |
@@ -120,6 +117,13 @@ function storefleet_get_staff_roles()
 | products.delete
 |
 |     Delete merchant products.
+|
+| products.branches.manage
+|
+|     Assign products to one or more branches.
+|
+|     Staff may only assign branches accessible through the SAME StoreFleet
+|     role granting this permission.
 |
 | inventory.view
 |
@@ -142,6 +146,9 @@ function storefleet_get_staff_permission_matrix()
         |
         | Full merchant operational access within assigned branches.
         |
+        | Managers may manage product branch assignments for branches they are
+        | authorized to manage.
+        |
         */
 
         'manager' => [
@@ -156,6 +163,7 @@ function storefleet_get_staff_permission_matrix()
             'products.create',
             'products.edit',
             'products.delete',
+            'products.branches.manage',
 
 
             /*
@@ -214,6 +222,9 @@ function storefleet_get_staff_permission_matrix()
         |
         | Full operational access within assigned branches.
         |
+        | Branch Managers may manage product branch assignments only for
+        | branches assigned to their Branch Manager role.
+        |
         */
 
         'branch_manager' => [
@@ -228,6 +239,7 @@ function storefleet_get_staff_permission_matrix()
             'products.create',
             'products.edit',
             'products.delete',
+            'products.branches.manage',
 
 
             /*
@@ -295,6 +307,7 @@ function storefleet_get_staff_permission_matrix()
         | - create products
         | - edit products
         | - delete products
+        | - manage product branch availability
         |
         */
 
@@ -338,6 +351,7 @@ function storefleet_get_staff_permission_matrix()
         | - view products
         | - create products
         | - edit products
+        | - assign products to authorized branches
         | - view inventory
         | - manage inventory
         |
@@ -358,6 +372,7 @@ function storefleet_get_staff_permission_matrix()
             'products.view',
             'products.create',
             'products.edit',
+            'products.branches.manage',
 
 
             /*
@@ -378,7 +393,7 @@ function storefleet_get_staff_permission_matrix()
         |
         | Order Staff can reference products while processing orders.
         |
-        | They cannot mutate the product catalog.
+        | They cannot mutate the product catalog or product branch assignment.
         |
         */
 
@@ -532,6 +547,7 @@ function storefleet_staff_role_has_permission(
 |   products.view
 |   products.create
 |   products.edit
+|   products.branches.manage
 |   inventory.view
 |   inventory.manage
 |
@@ -542,6 +558,7 @@ function storefleet_staff_role_has_permission(
 |   products.view
 |   products.create
 |   products.edit
+|   products.branches.manage
 |   pos.use
 |   inventory.view
 |   inventory.manage
@@ -662,15 +679,18 @@ function storefleet_get_current_staff_permissions()
 |
 | Request:
 |
-| products.edit + BGC
+| products.branches.manage + BGC
 |
-| products.edit comes from Inventory Staff.
+| products.branches.manage comes from Inventory Staff.
 |
 | Inventory Staff does not have BGC.
 |
 | Result:
 |
 | DENY
+|
+| The Cashier role having BGC does NOT grant Inventory Staff branch-management
+| rights there.
 |
 */
 
