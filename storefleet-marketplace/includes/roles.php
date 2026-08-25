@@ -30,7 +30,6 @@ function storefleet_install_roles()
         );
 
     if (!$role) {
-
         add_role(
             'storefleet_staff',
             'StoreFleet Staff',
@@ -57,6 +56,7 @@ function storefleet_install_roles()
 function storefleet_get_staff_roles()
 {
     return [
+
         'manager' =>
             'Manager',
 
@@ -83,12 +83,51 @@ function storefleet_get_staff_roles()
 | StoreFleet Permission Matrix
 |--------------------------------------------------------------------------
 |
-| WordPress capabilities are intentionally NOT used for these operational
-| permissions.
+| Staff may have multiple StoreFleet roles.
 |
-| A staff member may have multiple roles.
+| Effective permissions are the union of all assigned roles.
 |
-| Effective permissions are the union of all assigned StoreFleet roles.
+| IMPORTANT:
+|
+| Branch assignment is NOT represented by:
+|
+|   branches.view
+|
+| anymore.
+|
+| Staff choose their current operational branch using the global branch
+| selector.
+|
+| Permission + branch authorization is checked using the SAME StoreFleet
+| role.
+|
+|--------------------------------------------------------------------------
+| Product Permissions
+|--------------------------------------------------------------------------
+|
+| products.view
+|
+|     View merchant products.
+|
+| products.create
+|
+|     Create new merchant products.
+|
+| products.edit
+|
+|     Edit existing merchant products.
+|
+| products.delete
+|
+|     Delete merchant products.
+|
+| inventory.view
+|
+|     View product inventory information.
+|
+| inventory.manage
+|
+|     Modify inventory information.
 |
 */
 
@@ -100,25 +139,68 @@ function storefleet_get_staff_permission_matrix()
         |--------------------------------------------------------------------------
         | Manager
         |--------------------------------------------------------------------------
+        |
+        | Full merchant operational access within assigned branches.
+        |
         */
 
         'manager' => [
 
-            'dashboard.view',
-
-            'branches.view',
+            /*
+            |--------------------------------------------------------------------------
+            | Products
+            |--------------------------------------------------------------------------
+            */
 
             'products.view',
+            'products.create',
+            'products.edit',
+            'products.delete',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Orders
+            |--------------------------------------------------------------------------
+            */
 
             'orders.view',
             'orders.manage',
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | POS
+            |--------------------------------------------------------------------------
+            */
+
             'pos.use',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Inventory
+            |--------------------------------------------------------------------------
+            */
 
             'inventory.view',
             'inventory.manage',
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Staff
+            |--------------------------------------------------------------------------
+            */
+
             'staff.view',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delivery
+            |--------------------------------------------------------------------------
+            */
 
             'delivery.view',
             'delivery.manage',
@@ -129,25 +211,68 @@ function storefleet_get_staff_permission_matrix()
         |--------------------------------------------------------------------------
         | Branch Manager
         |--------------------------------------------------------------------------
+        |
+        | Full operational access within assigned branches.
+        |
         */
 
         'branch_manager' => [
 
-            'dashboard.view',
-
-            'branches.view',
+            /*
+            |--------------------------------------------------------------------------
+            | Products
+            |--------------------------------------------------------------------------
+            */
 
             'products.view',
+            'products.create',
+            'products.edit',
+            'products.delete',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Orders
+            |--------------------------------------------------------------------------
+            */
 
             'orders.view',
             'orders.manage',
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | POS
+            |--------------------------------------------------------------------------
+            */
+
             'pos.use',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Inventory
+            |--------------------------------------------------------------------------
+            */
 
             'inventory.view',
             'inventory.manage',
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Staff
+            |--------------------------------------------------------------------------
+            */
+
             'staff.view',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delivery
+            |--------------------------------------------------------------------------
+            */
 
             'delivery.view',
             'delivery.manage',
@@ -158,17 +283,46 @@ function storefleet_get_staff_permission_matrix()
         |--------------------------------------------------------------------------
         | Cashier
         |--------------------------------------------------------------------------
+        |
+        | Cashier can:
+        |
+        | - view products
+        | - use wePOS
+        | - view inventory
+        |
+        | Cashier cannot:
+        |
+        | - create products
+        | - edit products
+        | - delete products
+        |
         */
 
         'cashier' => [
 
-            'dashboard.view',
-
-            'branches.view',
+            /*
+            |--------------------------------------------------------------------------
+            | Products
+            |--------------------------------------------------------------------------
+            */
 
             'products.view',
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | POS
+            |--------------------------------------------------------------------------
+            */
+
             'pos.use',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Inventory
+            |--------------------------------------------------------------------------
+            */
 
             'inventory.view',
         ],
@@ -178,15 +332,39 @@ function storefleet_get_staff_permission_matrix()
         |--------------------------------------------------------------------------
         | Inventory Staff
         |--------------------------------------------------------------------------
+        |
+        | Inventory Staff can:
+        |
+        | - view products
+        | - create products
+        | - edit products
+        | - view inventory
+        | - manage inventory
+        |
+        | Inventory Staff cannot:
+        |
+        | - delete products
+        |
         */
 
         'inventory_staff' => [
 
-            'dashboard.view',
-
-            'branches.view',
+            /*
+            |--------------------------------------------------------------------------
+            | Products
+            |--------------------------------------------------------------------------
+            */
 
             'products.view',
+            'products.create',
+            'products.edit',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Inventory
+            |--------------------------------------------------------------------------
+            */
 
             'inventory.view',
             'inventory.manage',
@@ -197,18 +375,39 @@ function storefleet_get_staff_permission_matrix()
         |--------------------------------------------------------------------------
         | Order Staff
         |--------------------------------------------------------------------------
+        |
+        | Order Staff can reference products while processing orders.
+        |
+        | They cannot mutate the product catalog.
+        |
         */
 
         'order_staff' => [
 
-            'dashboard.view',
-
-            'branches.view',
+            /*
+            |--------------------------------------------------------------------------
+            | Products
+            |--------------------------------------------------------------------------
+            */
 
             'products.view',
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Orders
+            |--------------------------------------------------------------------------
+            */
+
             'orders.view',
             'orders.manage',
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delivery
+            |--------------------------------------------------------------------------
+            */
 
             'delivery.view',
         ],
@@ -221,19 +420,19 @@ function storefleet_get_staff_permission_matrix()
         |
         | Merchant-owned in-house rider.
         |
-        | Lalamove is an external delivery provider and is not represented
-        | by this role.
+        | Lalamove remains an external delivery provider.
         |
         */
 
         'delivery_staff' => [
 
-            'dashboard.view',
-
-            'branches.view',
+            /*
+            |--------------------------------------------------------------------------
+            | Delivery
+            |--------------------------------------------------------------------------
+            */
 
             'delivery.view',
-
             'delivery.rider',
         ],
     ];
@@ -302,13 +501,14 @@ function storefleet_staff_role_has_permission(
         return false;
     }
 
-    return in_array(
-        $permission,
-        storefleet_get_staff_role_permissions(
-            $staff_role
-        ),
-        true
-    );
+    return
+        in_array(
+            $permission,
+            storefleet_get_staff_role_permissions(
+                $staff_role
+            ),
+            true
+        );
 }
 
 
@@ -320,17 +520,28 @@ function storefleet_staff_role_has_permission(
 | Example:
 |
 | Cashier:
+|
+|   products.view
 |   pos.use
 |   inventory.view
 |
 | +
 |
 | Inventory Staff:
+|
+|   products.view
+|   products.create
+|   products.edit
+|   inventory.view
 |   inventory.manage
 |
 | =
 |
-| Effective staff permissions:
+| Effective:
+|
+|   products.view
+|   products.create
+|   products.edit
 |   pos.use
 |   inventory.view
 |   inventory.manage
@@ -362,11 +573,16 @@ function storefleet_get_staff_permissions(
             $staff_id
         );
 
-    if (empty($role_keys)) {
+    if (
+        empty(
+            $role_keys
+        )
+    ) {
         return [];
     }
 
-    $permissions = [];
+    $permissions =
+        [];
 
     foreach (
         $role_keys as $role_key
@@ -391,7 +607,8 @@ function storefleet_get_staff_permissions(
         $permissions
     );
 
-    return $permissions;
+    return
+        $permissions;
 }
 
 
@@ -418,9 +635,10 @@ function storefleet_get_current_staff_permissions()
         return [];
     }
 
-    return storefleet_get_staff_permissions(
-        $staff_id
-    );
+    return
+        storefleet_get_staff_permissions(
+            $staff_id
+        );
 }
 
 
@@ -429,29 +647,30 @@ function storefleet_get_current_staff_permissions()
 | Find Roles That Grant A Permission
 |--------------------------------------------------------------------------
 |
-| This is important for role-specific branch authorization.
+| This preserves same-role branch authorization.
 |
 | Example:
 |
 | Employee:
 |
 | Cashier
-|   Makati + BGC
+|     Makati
+|     BGC
 |
 | Inventory Staff
-|   Makati
+|     Makati
 |
-| Requested:
-|   inventory.manage + BGC
+| Request:
 |
-| Only Inventory Staff grants inventory.manage.
+| products.edit + BGC
+|
+| products.edit comes from Inventory Staff.
+|
 | Inventory Staff does not have BGC.
 |
 | Result:
-|   DENY
 |
-| We must NOT incorrectly allow access merely because the Cashier role has
-| BGC access.
+| DENY
 |
 */
 
@@ -490,11 +709,16 @@ function storefleet_get_staff_roles_for_permission(
             $staff_id
         );
 
-    if (empty($role_keys)) {
+    if (
+        empty(
+            $role_keys
+        )
+    ) {
         return [];
     }
 
-    $matching_roles = [];
+    $matching_roles =
+        [];
 
     foreach (
         $role_keys as $role_key
@@ -510,11 +734,12 @@ function storefleet_get_staff_roles_for_permission(
         }
     }
 
-    return array_values(
-        array_unique(
-            $matching_roles
-        )
-    );
+    return
+        array_values(
+            array_unique(
+                $matching_roles
+            )
+        );
 }
 
 
@@ -525,13 +750,13 @@ function storefleet_get_staff_roles_for_permission(
 |
 | Without branch:
 |
-| At least one assigned role must grant the permission.
+| At least one assigned StoreFleet role must grant the permission.
 |
 | With branch:
 |
-| At least one SAME role must:
+| At least one SAME StoreFleet role must:
 |
-| 1. grant the permission
+| 1. grant the requested permission
 | 2. grant access to the requested branch
 |
 */
@@ -566,15 +791,28 @@ function storefleet_staff_has_permission(
     }
 
 
+    /*
+    |--------------------------------------------------------------------------
+    | Staff ID
+    |--------------------------------------------------------------------------
+    */
+
     $staff_id =
         absint(
-            $staff->id ?? 0
+            $staff->id
+            ?? 0
         );
 
     if (!$staff_id) {
         return false;
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Permission
+    |--------------------------------------------------------------------------
+    */
 
     $permission =
         sanitize_text_field(
@@ -588,7 +826,7 @@ function storefleet_staff_has_permission(
 
     /*
     |--------------------------------------------------------------------------
-    | Roles That Grant Requested Permission
+    | Roles Granting Requested Permission
     |--------------------------------------------------------------------------
     */
 
@@ -598,14 +836,18 @@ function storefleet_staff_has_permission(
             $permission
         );
 
-    if (empty($matching_roles)) {
+    if (
+        empty(
+            $matching_roles
+        )
+    ) {
         return false;
     }
 
 
     /*
     |--------------------------------------------------------------------------
-    | No Branch Scope Requested
+    | No Branch Scope
     |--------------------------------------------------------------------------
     */
 
@@ -621,7 +863,7 @@ function storefleet_staff_has_permission(
 
     /*
     |--------------------------------------------------------------------------
-    | Permission + Branch Must Come From Same Role
+    | Same Role Must Also Have Branch
     |--------------------------------------------------------------------------
     */
 
@@ -646,7 +888,6 @@ function storefleet_staff_has_permission(
             return true;
         }
     }
-
 
     return false;
 }
@@ -689,11 +930,12 @@ function storefleet_staff_id_has_permission(
         return false;
     }
 
-    return storefleet_staff_has_permission(
-        $staff,
-        $permission,
-        $branch_id
-    );
+    return
+        storefleet_staff_has_permission(
+            $staff,
+            $permission,
+            $branch_id
+        );
 }
 
 
@@ -722,11 +964,12 @@ function storefleet_current_staff_can(
         return false;
     }
 
-    return storefleet_staff_has_permission(
-        $staff,
-        $permission,
-        $branch_id
-    );
+    return
+        storefleet_staff_has_permission(
+            $staff,
+            $permission,
+            $branch_id
+        );
 }
 
 
@@ -744,7 +987,7 @@ function storefleet_current_staff_can(
 |
 | - active account required
 | - role must grant requested permission
-| - if branch supplied, that same role must have branch access
+| - same role must have access to requested branch
 |
 */
 
@@ -784,7 +1027,6 @@ function storefleet_current_user_can_storefleet(
         &&
         storefleet_is_merchant_owner()
     ) {
-
         /*
         |--------------------------------------------------------------------------
         | Merchant Owner Without Branch Scope
@@ -823,10 +1065,11 @@ function storefleet_current_user_can_storefleet(
             return false;
         }
 
-        return storefleet_merchant_owns_branch(
-            $merchant_id,
-            $branch_id
-        );
+        return
+            storefleet_merchant_owns_branch(
+                $merchant_id,
+                $branch_id
+            );
     }
 
 
@@ -836,10 +1079,11 @@ function storefleet_current_user_can_storefleet(
     |--------------------------------------------------------------------------
     */
 
-    return storefleet_current_staff_can(
-        $permission,
-        $branch_id
-    );
+    return
+        storefleet_current_staff_can(
+            $permission,
+            $branch_id
+        );
 }
 
 
@@ -851,13 +1095,6 @@ function storefleet_current_user_can_storefleet(
 | Protected handlers should use this.
 |
 | UI visibility alone is NOT authorization.
-|
-| Example:
-|
-| storefleet_require_permission(
-|     'inventory.manage',
-|     $branch_id
-| );
 |
 */
 
@@ -884,7 +1121,8 @@ function storefleet_require_permission(
             'storefleet-marketplace'
         ),
         [
-            'response' => 403,
+            'response' =>
+                403,
         ]
     );
 }
@@ -900,10 +1138,11 @@ function storefleet_can_view_module(
     $permission,
     $branch_id = 0
 ) {
-    return storefleet_current_user_can_storefleet(
-        $permission,
-        $branch_id
-    );
+    return
+        storefleet_current_user_can_storefleet(
+            $permission,
+            $branch_id
+        );
 }
 
 
@@ -912,17 +1151,12 @@ function storefleet_can_view_module(
 | In-House Rider Check
 |--------------------------------------------------------------------------
 |
-| A staff account can now have Delivery Staff plus other roles.
+| A staff account may have Delivery Staff plus other roles.
 |
-| Therefore this must NOT compare against the old single:
+| The Delivery Staff role itself must:
 |
-| $staff->staff_role
-|
-| It checks whether:
-|
-| - Delivery Staff role exists
-| - delivery.rider permission exists
-| - requested branch belongs to Delivery Staff role when branch is supplied
+| - grant delivery.rider
+| - have access to requested branch
 |
 */
 
@@ -943,7 +1177,8 @@ function storefleet_staff_is_inhouse_rider(
 
     $staff_id =
         absint(
-            $staff->id ?? 0
+            $staff->id
+            ?? 0
         );
 
     if (!$staff_id) {
@@ -953,7 +1188,7 @@ function storefleet_staff_is_inhouse_rider(
 
     /*
     |--------------------------------------------------------------------------
-    | Must Actually Have Delivery Staff Role
+    | Must Have Delivery Staff Role
     |--------------------------------------------------------------------------
     */
 
@@ -973,13 +1208,14 @@ function storefleet_staff_is_inhouse_rider(
 
     /*
     |--------------------------------------------------------------------------
-    | Permission + Branch Scope
+    | Permission + Branch
     |--------------------------------------------------------------------------
     */
 
-    return storefleet_staff_has_permission(
-        $staff,
-        'delivery.rider',
-        $branch_id
-    );
+    return
+        storefleet_staff_has_permission(
+            $staff,
+            'delivery.rider',
+            $branch_id
+        );
 }
