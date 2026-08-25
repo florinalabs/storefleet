@@ -62,6 +62,123 @@ function storefleet_get_wepos_frontend_url()
 
 /*
 |--------------------------------------------------------------------------
+| Prepare StoreFleet Staff wePOS Context
+|--------------------------------------------------------------------------
+|
+| The Dokan staff dashboard already synchronizes StoreFleet staff to their
+| merchant owner through _vendor_id.
+|
+| wePOS runs from its own frontend and REST requests, so those requests may
+| happen without first rendering the Dokan staff dashboard shell.
+|
+| Synchronize the existing StoreFleet → Dokan merchant context early for the
+| current request. This does NOT grant dokandar or change the WordPress role.
+|
+*/
+
+function storefleet_prepare_staff_wepos_context()
+{
+    static $prepared =
+        false;
+
+    if ($prepared) {
+        return;
+    }
+
+    if (!is_user_logged_in()) {
+        return;
+    }
+
+    if (
+        !function_exists(
+            'storefleet_is_staff_user'
+        )
+        ||
+        !storefleet_is_staff_user()
+    ) {
+        return;
+    }
+
+    if (
+        !function_exists(
+            'storefleet_get_current_staff'
+        )
+    ) {
+        return;
+    }
+
+    $staff =
+        storefleet_get_current_staff();
+
+    if (
+        !$staff
+        ||
+        (int) $staff->is_active !== 1
+    ) {
+        return;
+    }
+
+    $merchant_id =
+        absint(
+            $staff->merchant_id
+            ?? 0
+        );
+
+    if (!$merchant_id) {
+        return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reuse Existing StoreFleet Dokan Context Synchronizer
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !function_exists(
+            'storefleet_sync_staff_dokan_context'
+        )
+    ) {
+        return;
+    }
+
+    storefleet_sync_staff_dokan_context(
+        get_current_user_id()
+    );
+
+    $prepared =
+        true;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Synchronize Context For wePOS Frontend + REST
+|--------------------------------------------------------------------------
+|
+| wp_loaded covers normal frontend requests.
+|
+| rest_api_init provides an explicit REST safety hook because wePOS loads its
+| products and operational data through WordPress REST endpoints.
+|
+*/
+
+add_action(
+    'wp_loaded',
+    'storefleet_prepare_staff_wepos_context',
+    5
+);
+
+add_action(
+    'rest_api_init',
+    'storefleet_prepare_staff_wepos_context',
+    5
+);
+
+
+/*
+|--------------------------------------------------------------------------
 | Is StoreFleet Staff Eligible For POS
 |--------------------------------------------------------------------------
 |
@@ -210,6 +327,604 @@ function storefleet_staff_can_access_wepos(
             $branch_id
         );
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| Filter wePOS Products For StoreFleet Staff
+|--------------------------------------------------------------------------
+|
+| wePOS fetches its POS catalogue through:
+|
+|     wepos/v1/products
+|
+| and exposes the final WP_Query arguments through:
+|
+|     wepos_rest_product_query_args
+|
+| Dokan's normal vendor filter is attached to WooCommerce's generic REST
+| product hook, so StoreFleet explicitly applies the operational merchant
+| and current branch context here.
+|
+| Rules:
+|
+| 1. StoreFleet staff only.
+| 2. The current employee must have pos.use for the selected branch.
+| 3. Products must belong to the employee's merchant.
+| 4. Products must be available at the selected StoreFleet branch.
+|
+*/
+
+add_filter(
+    'wepos_rest_product_query_args',
+    'storefleet_filter_staff_wepos_products',
+    20,
+    2
+);
+
+
+function storefleet_filter_staff_wepos_products(
+    $args,
+    $request
+) {
+    /*
+    |--------------------------------------------------------------------------
+    | StoreFleet Staff Only
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !is_user_logged_in()
+        ||
+        !function_exists(
+            'storefleet_is_staff_user'
+        )
+        ||
+        !storefleet_is_staff_user()
+    ) {
+        return $args;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | POS Authorization
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !storefleet_staff_can_access_wepos()
+    ) {
+        $args['post__in'] = [0];
+
+        return $args;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Staff + Merchant + Branch
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !function_exists(
+            'storefleet_get_current_staff'
+        )
+        ||
+        !function_exists(
+            'storefleet_get_current_staff_branch_id'
+        )
+    ) {
+        $args['post__in'] = [0];
+
+        return $args;
+    }
+
+    $staff =
+        storefleet_get_current_staff();
+
+    $merchant_id =
+        $staff
+            ? absint(
+                $staff->merchant_id
+                ?? 0
+            )
+            : 0;
+
+    $branch_id =
+        absint(
+            storefleet_get_current_staff_branch_id()
+        );
+
+    if (
+        !$merchant_id
+        ||
+        !$branch_id
+    ) {
+        $args['post__in'] = [0];
+
+        return $args;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Merchant Product Ownership
+    |--------------------------------------------------------------------------
+    */
+
+    $args['author'] =
+        $merchant_id;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Product Branch Helper Required
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !function_exists(
+            'storefleet_product_is_available_at_branch'
+        )
+    ) {
+        $args['post__in'] = [0];
+
+        return $args;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Merchant Product IDs
+    |--------------------------------------------------------------------------
+    |
+    | Query IDs separately so we can apply StoreFleet's existing product
+    | branch availability helper before the final wePOS REST query runs.
+    |
+    */
+
+    $merchant_product_ids =
+        get_posts(
+            [
+                'post_type' =>
+                    'product',
+
+                'post_status' =>
+                    'publish',
+
+                'author' =>
+                    $merchant_id,
+
+                'posts_per_page' =>
+                    -1,
+
+                'fields' =>
+                    'ids',
+
+                'orderby' =>
+                    'ID',
+
+                'order' =>
+                    'ASC',
+
+                'no_found_rows' =>
+                    true,
+
+                'update_post_meta_cache' =>
+                    false,
+
+                'update_post_term_cache' =>
+                    false,
+            ]
+        );
+
+    $merchant_product_ids =
+        array_values(
+            array_unique(
+                array_filter(
+                    array_map(
+                        'absint',
+                        $merchant_product_ids
+                    )
+                )
+            )
+        );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Branch Product IDs
+    |--------------------------------------------------------------------------
+    */
+
+    $branch_product_ids =
+        [];
+
+    foreach (
+        $merchant_product_ids as $product_id
+    ) {
+        if (
+            storefleet_product_is_available_at_branch(
+                $product_id,
+                $branch_id
+            )
+        ) {
+            $branch_product_ids[] =
+                $product_id;
+        }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Preserve Existing wePOS Filters
+    |--------------------------------------------------------------------------
+    |
+    | Low-stock and other filters may already have populated post__in.
+    | Intersect with them instead of overwriting them.
+    |
+    */
+
+    if (
+        isset(
+            $args['post__in']
+        )
+        &&
+        is_array(
+            $args['post__in']
+        )
+        &&
+        !empty(
+            $args['post__in']
+        )
+    ) {
+        $existing_ids =
+            array_values(
+                array_unique(
+                    array_filter(
+                        array_map(
+                            'absint',
+                            $args['post__in']
+                        )
+                    )
+                )
+            );
+
+        $branch_product_ids =
+            array_values(
+                array_intersect(
+                    $existing_ids,
+                    $branch_product_ids
+                )
+            );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fail Closed When Branch Has No Products
+    |--------------------------------------------------------------------------
+    */
+
+    $args['post__in'] =
+        !empty(
+            $branch_product_ids
+        )
+            ? $branch_product_ids
+            : [0];
+
+    return $args;
+}
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Allow StoreFleet Staff To Read Authorized Products In WooCommerce REST
+|--------------------------------------------------------------------------
+|
+| WooCommerce's REST product response preparation checks:
+|
+|     wc_rest_check_post_permissions( 'product', 'read', $product_id )
+|
+| For products, that resolves to the post type's read_private_posts
+| capability. StoreFleet employees intentionally do not receive broad
+| WooCommerce product-management capabilities, so the default check can fail
+| even when StoreFleet has already authorized the product for the employee.
+|
+| This filter provides a narrow read-only exception.
+|
+| It does NOT grant:
+|
+| - manage_woocommerce
+| - edit_products
+| - publish_products
+| - delete_products
+| - dokandar
+| - seller/vendor roles
+|
+| The product must still:
+|
+| 1. belong to the employee's merchant,
+| 2. be available at the employee's current branch,
+| 3. be visible to a staff role with products.view,
+| 4. be accessed by an employee who can use POS for that branch.
+|
+*/
+
+add_filter(
+    'woocommerce_rest_check_permissions',
+    'storefleet_allow_staff_wepos_product_rest_read',
+    100,
+    4
+);
+
+
+function storefleet_allow_staff_wepos_product_rest_read(
+    $permission,
+    $context,
+    $object_id,
+    $object_type
+) {
+    /*
+    |--------------------------------------------------------------------------
+    | Preserve Existing Allowed Requests
+    |--------------------------------------------------------------------------
+    */
+
+    if ($permission) {
+        return true;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Read-Only Product Objects
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $context !== 'read'
+        ||
+        !in_array(
+            $object_type,
+            [
+                'product',
+                'product_variation',
+            ],
+            true
+        )
+    ) {
+        return $permission;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | StoreFleet Staff Only
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !is_user_logged_in()
+        ||
+        !function_exists(
+            'storefleet_is_staff_user'
+        )
+        ||
+        !storefleet_is_staff_user()
+    ) {
+        return $permission;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ensure Existing Merchant Context Is Prepared
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        function_exists(
+            'storefleet_prepare_staff_wepos_context'
+        )
+    ) {
+        storefleet_prepare_staff_wepos_context();
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Staff + Branch
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !function_exists(
+            'storefleet_get_current_staff'
+        )
+        ||
+        !function_exists(
+            'storefleet_get_current_staff_branch_id'
+        )
+    ) {
+        return $permission;
+    }
+
+    $staff =
+        storefleet_get_current_staff();
+
+    if (
+        !$staff
+        ||
+        (int) $staff->is_active !== 1
+    ) {
+        return $permission;
+    }
+
+    $merchant_id =
+        absint(
+            $staff->merchant_id
+            ?? 0
+        );
+
+    $branch_id =
+        absint(
+            storefleet_get_current_staff_branch_id()
+        );
+
+    if (
+        !$merchant_id
+        ||
+        !$branch_id
+    ) {
+        return $permission;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Require POS + Product View For This Branch
+    |--------------------------------------------------------------------------
+    |
+    | POS access remains independently authorized by pos.use.
+    |
+    | products.view is also required so the REST exception cannot become a
+    | generic product-reading bypass for staff without product visibility.
+    |
+    */
+
+    if (
+        !storefleet_staff_can_access_wepos()
+        ||
+        !function_exists(
+            'storefleet_current_staff_can'
+        )
+        ||
+        !storefleet_current_staff_can(
+            'products.view',
+            $branch_id
+        )
+    ) {
+        return $permission;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Product
+    |--------------------------------------------------------------------------
+    */
+
+    $object_id =
+        absint(
+            $object_id
+        );
+
+    if (!$object_id) {
+        return $permission;
+    }
+
+    $product_post =
+        get_post(
+            $object_id
+        );
+
+    if (
+        !($product_post instanceof WP_Post)
+        ||
+        !in_array(
+            $product_post->post_type,
+            [
+                'product',
+                'product_variation',
+            ],
+            true
+        )
+    ) {
+        return $permission;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve Parent Product For Variations
+    |--------------------------------------------------------------------------
+    */
+
+    $product_id =
+        $object_id;
+
+    if (
+        $product_post->post_type ===
+        'product_variation'
+    ) {
+        $product_id =
+            absint(
+                $product_post->post_parent
+            );
+
+        if (!$product_id) {
+            return $permission;
+        }
+
+        $product_post =
+            get_post(
+                $product_id
+            );
+
+        if (
+            !($product_post instanceof WP_Post)
+            ||
+            $product_post->post_type !==
+            'product'
+        ) {
+            return $permission;
+        }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Merchant Ownership
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        absint(
+            $product_post->post_author
+        )
+        !==
+        $merchant_id
+    ) {
+        return $permission;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Branch Availability
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !function_exists(
+            'storefleet_product_is_available_at_branch'
+        )
+        ||
+        !storefleet_product_is_available_at_branch(
+            $product_id,
+            $branch_id
+        )
+    ) {
+        return $permission;
+    }
+
+    return true;
+}
+
 
 
 /*
