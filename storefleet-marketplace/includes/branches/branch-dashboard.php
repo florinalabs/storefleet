@@ -109,8 +109,7 @@ function storefleet_render_branches_dashboard(
     $query_vars
 ) {
     if (
-        empty($query_vars)
-        ||
+        empty($query_vars) ||
         !array_key_exists(
             'storefleet-branches',
             $query_vars
@@ -418,7 +417,7 @@ function storefleet_render_branch_form()
             >
 
                 <label for="address_line_1">
-                    Address Line 1
+                    Address Line 1 *
                 </label>
 
                 <input
@@ -426,6 +425,8 @@ function storefleet_render_branch_form()
                     type="text"
                     name="address_line_1"
                     class="storefleet-form-control"
+                    placeholder="Building, house number, street"
+                    required
                 >
 
             </div>
@@ -447,6 +448,7 @@ function storefleet_render_branch_form()
                     type="text"
                     name="address_line_2"
                     class="storefleet-form-control"
+                    placeholder="Barangay, subdivision, unit or floor"
                 >
 
             </div>
@@ -455,7 +457,7 @@ function storefleet_render_branch_form()
             <div class="storefleet-form-group">
 
                 <label for="city">
-                    City
+                    City / Municipality *
                 </label>
 
                 <input
@@ -463,6 +465,8 @@ function storefleet_render_branch_form()
                     type="text"
                     name="city"
                     class="storefleet-form-control"
+                    placeholder="Makati City"
+                    required
                 >
 
             </div>
@@ -471,7 +475,7 @@ function storefleet_render_branch_form()
             <div class="storefleet-form-group">
 
                 <label for="state">
-                    Province / State
+                    Province / State *
                 </label>
 
                 <input
@@ -479,6 +483,8 @@ function storefleet_render_branch_form()
                     type="text"
                     name="state"
                     class="storefleet-form-control"
+                    placeholder="Metro Manila"
+                    required
                 >
 
             </div>
@@ -495,6 +501,7 @@ function storefleet_render_branch_form()
                     type="text"
                     name="postcode"
                     class="storefleet-form-control"
+                    placeholder="1210"
                 >
 
             </div>
@@ -511,41 +518,52 @@ function storefleet_render_branch_form()
                     type="text"
                     name="contact_phone"
                     class="storefleet-form-control"
+                    placeholder="+63 917 123 4567"
                 >
 
             </div>
 
 
-            <div class="storefleet-form-group">
+            <div
+                class="
+                    storefleet-form-group
+                    storefleet-form-group-full
+                "
+            >
 
-                <label for="latitude">
-                    Latitude
-                </label>
-
-                <input
-                    id="latitude"
-                    type="number"
-                    step="0.0000001"
-                    name="latitude"
-                    class="storefleet-form-control"
+                <div
+                    style="
+                        padding: 14px 16px;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 8px;
+                        background: #f9fafb;
+                    "
                 >
 
-            </div>
+                    <strong
+                        style="
+                            display: block;
+                            margin-bottom: 4px;
+                        "
+                    >
+                        Automatic Location
+                    </strong>
 
 
-            <div class="storefleet-form-group">
+                    <p
+                        style="
+                            margin: 0;
+                            color: #6b7280;
+                            font-size: 13px;
+                            line-height: 1.5;
+                        "
+                    >
+                        StoreFleet automatically determines
+                        the branch latitude and longitude
+                        from the address above.
+                    </p>
 
-                <label for="longitude">
-                    Longitude
-                </label>
-
-                <input
-                    id="longitude"
-                    type="number"
-                    step="0.0000001"
-                    name="longitude"
-                    class="storefleet-form-control"
-                >
+                </div>
 
             </div>
 
@@ -609,6 +627,12 @@ function storefleet_render_branch_form()
 
 function storefleet_branch_notice($notice)
 {
+    /*
+    |--------------------------------------------------------------------------
+    | Branch Created
+    |--------------------------------------------------------------------------
+    */
+
     if ($notice === 'branch-created') {
 
         ?>
@@ -620,6 +644,8 @@ function storefleet_branch_notice($notice)
             "
         >
             Branch created successfully.
+            StoreFleet automatically saved
+            its delivery coordinates.
         </div>
 
         <?php
@@ -627,6 +653,12 @@ function storefleet_branch_notice($notice)
         return;
     }
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Missing Name
+    |--------------------------------------------------------------------------
+    */
 
     if ($notice === 'missing-name') {
 
@@ -647,6 +679,65 @@ function storefleet_branch_notice($notice)
     }
 
 
+    /*
+    |--------------------------------------------------------------------------
+    | Missing Address
+    |--------------------------------------------------------------------------
+    */
+
+    if ($notice === 'missing-address') {
+
+        ?>
+
+        <div
+            class="
+                storefleet-notice
+                storefleet-notice-error
+            "
+        >
+            Street address, city, and province
+            are required.
+        </div>
+
+        <?php
+
+        return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Geocoding Failed
+    |--------------------------------------------------------------------------
+    */
+
+    if ($notice === 'geocode-failed') {
+
+        ?>
+
+        <div
+            class="
+                storefleet-notice
+                storefleet-notice-error
+            "
+        >
+            We could not locate this branch address.
+            Please check the street, city, province,
+            and postal code and try again.
+        </div>
+
+        <?php
+
+        return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Branch Save Error
+    |--------------------------------------------------------------------------
+    */
+
     if ($notice === 'branch-error') {
 
         ?>
@@ -661,5 +752,7 @@ function storefleet_branch_notice($notice)
         </div>
 
         <?php
+
+        return;
     }
 }
