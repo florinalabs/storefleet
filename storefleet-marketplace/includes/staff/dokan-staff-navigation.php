@@ -82,40 +82,47 @@ function storefleet_get_dokan_staff_routes()
         ],
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | Orders
-        |--------------------------------------------------------------------------
-        |
-        | StoreFleet-controlled for now.
-        |
-        | This can later move to Dokan React #orders after the order action
-        | permissions are mapped.
-        |
-        */
+/*
+|--------------------------------------------------------------------------
+| Orders
+|--------------------------------------------------------------------------
+|
+| Modern Dokan React Orders:
+|
+| /dashboard/new/#orders
+|
+| StoreFleet remains responsible for:
+|
+| - orders.view authorization
+| - orders.manage authorization
+| - selected branch authorization
+|
+| REST/API authorization is enforced separately.
+|
+*/
 
-        'storefleet-orders' => [
-            'title' =>
-                'Orders',
+'storefleet-orders' => [
+    'title' =>
+        'Orders',
 
-            'icon' =>
-                '<i class="fas fa-shopping-cart"></i>',
+    'icon' =>
+        '<i class="fas fa-shopping-cart"></i>',
 
-            'permission' =>
-                'orders.view',
+    'permission' =>
+        'orders.view',
 
-            'branch_scoped' =>
-                true,
+    'branch_scoped' =>
+        true,
 
-            'native_dokan_route' =>
-                '',
+    'native_dokan_route' =>
+        '',
 
-            'react_route' =>
-                '',
+    'react_route' =>
+        'orders',
 
-            'position' =>
-                20,
-        ],
+    'position' =>
+        20,
+],
 
 
         /*
@@ -152,34 +159,46 @@ function storefleet_get_dokan_staff_routes()
         ],
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | Delivery
-        |--------------------------------------------------------------------------
-        */
+            /*
+            |--------------------------------------------------------------------------
+            | Delivery
+            |--------------------------------------------------------------------------
+            |
+            | StoreFleet React Delivery:
+            |
+            | /dashboard/new/#storefleet-delivery
+            |
+            | StoreFleet remains responsible for:
+            |
+            | - delivery.view
+            | - delivery.manage
+            | - delivery.rider
+            | - selected branch authorization
+            |
+            */
 
-        'storefleet-delivery' => [
-            'title' =>
-                'Delivery',
+            'storefleet-delivery' => [
+                'title' =>
+                    'Delivery',
 
-            'icon' =>
-                '<i class="fas fa-motorcycle"></i>',
+                'icon' =>
+                    '<i class="fas fa-motorcycle"></i>',
 
-            'permission' =>
-                'delivery.view',
+                'permission' =>
+                    'delivery.view',
 
-            'branch_scoped' =>
-                true,
+                'branch_scoped' =>
+                    true,
 
-            'native_dokan_route' =>
-                '',
+                'native_dokan_route' =>
+                    '',
 
-            'react_route' =>
-                '',
+                'react_route' =>
+                    'storefleet-delivery',
 
-            'position' =>
-                40,
-        ],
+                'position' =>
+                    40,
+            ],
 
 
         /*

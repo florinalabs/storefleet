@@ -155,7 +155,6 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/branches/branch-dashboard.php';
 
-
 /*
 |--------------------------------------------------------------------------
 | Staff
@@ -195,7 +194,24 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/staff/dokan-staff-shell.php';
 
+/*
+|--------------------------------------------------------------------------
+| Delivery
+|--------------------------------------------------------------------------
+|
+| StoreFleet Delivery inside Dokan React dashboard.
+|
+*/
 
+
+require_once STOREFLEET_PATH .
+    'includes/delivery/delivery-helpers.php';
+
+require_once STOREFLEET_PATH .
+    'includes/delivery/delivery-actions.php';
+
+require_once STOREFLEET_PATH .
+    'includes/delivery/delivery-dashboard.php';
 /*
 |--------------------------------------------------------------------------
 | Inventory

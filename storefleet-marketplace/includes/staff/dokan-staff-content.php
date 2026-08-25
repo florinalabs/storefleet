@@ -373,10 +373,8 @@ function storefleet_render_dokan_staff_content(
 
         case 'storefleet-team':
 
-            storefleet_render_dokan_staff_placeholder(
-                'Staff',
-                'View staff information permitted for the current branch.',
-                'staff.view',
+            storefleet_render_dokan_staff_team(
+                $staff,
                 $branch
             );
 
@@ -1065,6 +1063,714 @@ function storefleet_render_dokan_staff_branches(
                         </p>
 
                     <?php endif; ?>
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <?php
+}
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Staff Directory
+|--------------------------------------------------------------------------
+|
+| Read-only staff directory for the CURRENT StoreFleet branch.
+|
+| Access to this renderer is already protected above by:
+|
+| - active StoreFleet staff account
+| - staff.view
+| - current branch
+| - same-role permission + branch authorization
+|
+| Staff management actions remain merchant-owner only in staff-actions.php.
+|
+*/
+
+function storefleet_render_dokan_staff_team(
+    $staff,
+    $branch
+) {
+    $merchant_id =
+        absint(
+            $staff->merchant_id
+            ?? 0
+        );
+
+    $branch_id =
+        absint(
+            $branch->id
+            ?? 0
+        );
+
+    if (
+        !$merchant_id
+        ||
+        !$branch_id
+        ||
+        !function_exists(
+            'storefleet_get_merchant_staff_for_branch'
+        )
+    ) {
+        storefleet_dokan_staff_content_denied();
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Branch Staff
+    |--------------------------------------------------------------------------
+    */
+
+    $members =
+        storefleet_get_merchant_staff_for_branch(
+            $merchant_id,
+            $branch_id
+        );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Summary
+    |--------------------------------------------------------------------------
+    */
+
+    $total_staff =
+        count(
+            $members
+        );
+
+    $active_staff =
+        0;
+
+    $suspended_staff =
+        0;
+
+    foreach (
+        $members as $member
+    ) {
+        if (
+            (int) (
+                $member->is_active
+                ?? 0
+            ) === 1
+        ) {
+            $active_staff++;
+
+            continue;
+        }
+
+        $suspended_staff++;
+    }
+
+    ?>
+
+    <style>
+
+        .storefleet-staff-directory-summary {
+            display: grid;
+            grid-template-columns:
+                repeat(
+                    3,
+                    minmax(0, 1fr)
+                );
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .storefleet-staff-directory-stat {
+            padding: 18px;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+        }
+
+        .storefleet-staff-directory-stat-label {
+            display: block;
+            margin-bottom: 6px;
+            color: #6b7280;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .storefleet-staff-directory-stat-value {
+            display: block;
+            color: #111827;
+            font-size: 28px;
+            line-height: 1;
+            font-weight: 700;
+        }
+
+        .storefleet-staff-directory-context {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .storefleet-staff-directory-context p {
+            margin: 0;
+            color: #6b7280;
+        }
+
+        .storefleet-staff-directory-branch {
+            display: inline-flex;
+            align-items: center;
+            min-height: 32px;
+            padding: 0 11px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: #374151;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .storefleet-staff-directory-person {
+            min-width: 210px;
+        }
+
+        .storefleet-staff-directory-name {
+            display: block;
+            color: #111827;
+            font-weight: 650;
+        }
+
+        .storefleet-staff-directory-login {
+            display: block;
+            margin-top: 3px;
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .storefleet-staff-directory-roles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .storefleet-staff-directory-role {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding: 0 9px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #4338ca;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .storefleet-staff-directory-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 28px;
+            padding: 0 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 650;
+            white-space: nowrap;
+        }
+
+        .storefleet-staff-directory-status::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .storefleet-staff-directory-status.is-active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .storefleet-staff-directory-status.is-suspended {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .storefleet-staff-directory-empty {
+            padding: 44px 24px;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .storefleet-staff-directory-empty strong {
+            display: block;
+            margin-bottom: 6px;
+            color: #111827;
+            font-size: 16px;
+        }
+
+        @media (max-width: 800px) {
+
+            .storefleet-staff-directory-summary {
+                grid-template-columns: 1fr;
+            }
+        }
+
+    </style>
+
+
+    <div class="storefleet-dashboard-page">
+
+        <!--
+        |--------------------------------------------------------------------------
+        | Header
+        |--------------------------------------------------------------------------
+        -->
+
+        <div class="storefleet-page-header">
+
+            <h1>
+                Staff
+            </h1>
+
+            <p>
+                View staff assigned to the current
+                StoreFleet branch.
+            </p>
+
+        </div>
+
+
+        <!--
+        |--------------------------------------------------------------------------
+        | Summary
+        |--------------------------------------------------------------------------
+        -->
+
+        <div
+            class="
+                storefleet-staff-directory-summary
+            "
+        >
+
+            <div
+                class="
+                    storefleet-staff-directory-stat
+                "
+            >
+
+                <span
+                    class="
+                        storefleet-staff-directory-stat-label
+                    "
+                >
+                    Total Staff
+                </span>
+
+                <span
+                    class="
+                        storefleet-staff-directory-stat-value
+                    "
+                >
+                    <?php
+                    echo esc_html(
+                        (string) $total_staff
+                    );
+                    ?>
+                </span>
+
+            </div>
+
+
+            <div
+                class="
+                    storefleet-staff-directory-stat
+                "
+            >
+
+                <span
+                    class="
+                        storefleet-staff-directory-stat-label
+                    "
+                >
+                    Active
+                </span>
+
+                <span
+                    class="
+                        storefleet-staff-directory-stat-value
+                    "
+                >
+                    <?php
+                    echo esc_html(
+                        (string) $active_staff
+                    );
+                    ?>
+                </span>
+
+            </div>
+
+
+            <div
+                class="
+                    storefleet-staff-directory-stat
+                "
+            >
+
+                <span
+                    class="
+                        storefleet-staff-directory-stat-label
+                    "
+                >
+                    Suspended
+                </span>
+
+                <span
+                    class="
+                        storefleet-staff-directory-stat-value
+                    "
+                >
+                    <?php
+                    echo esc_html(
+                        (string) $suspended_staff
+                    );
+                    ?>
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <!--
+        |--------------------------------------------------------------------------
+        | Directory
+        |--------------------------------------------------------------------------
+        -->
+
+        <div class="storefleet-card">
+
+            <div class="storefleet-card-header">
+
+                <div
+                    class="
+                        storefleet-staff-directory-context
+                    "
+                >
+
+                    <div>
+
+                        <h2
+                            style="
+                                margin: 0 0 5px;
+                            "
+                        >
+                            Staff Members
+                        </h2>
+
+                        <p>
+                            Employees whose StoreFleet roles
+                            include this branch.
+                        </p>
+
+                    </div>
+
+
+                    <span
+                        class="
+                            storefleet-staff-directory-branch
+                        "
+                    >
+                        <?php
+                        echo esc_html(
+                            $branch->name
+                        );
+                        ?>
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="storefleet-card-body">
+
+                <?php if (empty($members)) : ?>
+
+                    <div
+                        class="
+                            storefleet-staff-directory-empty
+                        "
+                    >
+
+                        <strong>
+                            No staff assigned
+                        </strong>
+
+                        No StoreFleet staff members are
+                        currently assigned to
+
+                        <?php
+                        echo esc_html(
+                            $branch->name
+                        );
+                        ?>.
+
+                    </div>
+
+                <?php else : ?>
+
+                    <div
+                        style="
+                            width: 100%;
+                            overflow-x: auto;
+                        "
+                    >
+
+                        <table class="storefleet-table">
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>
+                                        Staff
+                                    </th>
+
+                                    <th>
+                                        Roles For This Branch
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                <?php
+                                foreach (
+                                    $members as $member
+                                ) :
+                                ?>
+
+                                    <?php
+
+                                    $member_staff_id =
+                                        absint(
+                                            $member->id
+                                            ?? 0
+                                        );
+
+                                    $branch_roles = [];
+
+                                    if ($member_staff_id) {
+
+                                        $role_keys =
+                                            storefleet_get_staff_roles_for_staff(
+                                                $member_staff_id
+                                            );
+
+                                        foreach (
+                                            $role_keys as $role_key
+                                        ) {
+                                            $role_key =
+                                                sanitize_key(
+                                                    $role_key
+                                                );
+
+                                            if (
+                                                $role_key === ''
+                                            ) {
+                                                continue;
+                                            }
+
+                                            $role_branch_ids =
+                                                storefleet_get_staff_role_branch_ids(
+                                                    $member_staff_id,
+                                                    $role_key
+                                                );
+
+                                            if (
+                                                !in_array(
+                                                    $branch_id,
+                                                    $role_branch_ids,
+                                                    true
+                                                )
+                                            ) {
+                                                continue;
+                                            }
+
+                                            $branch_roles[] =
+                                                storefleet_get_staff_role_label(
+                                                    $role_key
+                                                );
+                                        }
+                                    }
+
+                                    $branch_roles =
+                                        array_values(
+                                            array_unique(
+                                                array_filter(
+                                                    $branch_roles
+                                                )
+                                            )
+                                        );
+
+                                    $is_active =
+                                        (int) (
+                                            $member->is_active
+                                            ?? 0
+                                        ) === 1;
+
+                                    ?>
+
+                                    <tr>
+
+                                        <!-- Staff -->
+
+                                        <td
+                                            class="
+                                                storefleet-staff-directory-person
+                                            "
+                                        >
+
+                                            <span
+                                                class="
+                                                    storefleet-staff-directory-name
+                                                "
+                                            >
+                                                <?php
+                                                echo esc_html(
+                                                    $member->display_name
+                                                    ?? ''
+                                                );
+                                                ?>
+                                            </span>
+
+
+                                            <?php
+                                            if (
+                                                !empty(
+                                                    $member->user_login
+                                                )
+                                            ) :
+                                            ?>
+
+                                                <span
+                                                    class="
+                                                        storefleet-staff-directory-login
+                                                    "
+                                                >
+                                                    @<?php
+                                                    echo esc_html(
+                                                        $member->user_login
+                                                    );
+                                                    ?>
+                                                </span>
+
+                                            <?php endif; ?>
+
+                                        </td>
+
+
+                                        <!-- Roles -->
+
+                                        <td>
+
+                                            <?php
+                                            if (
+                                                empty(
+                                                    $branch_roles
+                                                )
+                                            ) :
+                                            ?>
+
+                                                <span
+                                                    style="
+                                                        color: #6b7280;
+                                                    "
+                                                >
+                                                    —
+                                                </span>
+
+                                            <?php else : ?>
+
+                                                <div
+                                                    class="
+                                                        storefleet-staff-directory-roles
+                                                    "
+                                                >
+
+                                                    <?php
+                                                    foreach (
+                                                        $branch_roles as
+                                                        $role_label
+                                                    ) :
+                                                    ?>
+
+                                                        <span
+                                                            class="
+                                                                storefleet-staff-directory-role
+                                                            "
+                                                        >
+                                                            <?php
+                                                            echo esc_html(
+                                                                $role_label
+                                                            );
+                                                            ?>
+                                                        </span>
+
+                                                    <?php endforeach; ?>
+
+                                                </div>
+
+                                            <?php endif; ?>
+
+                                        </td>
+
+
+                                        <!-- Status -->
+
+                                        <td>
+
+                                            <span
+                                                class="
+                                                    storefleet-staff-directory-status
+                                                    <?php
+                                                    echo $is_active
+                                                        ? 'is-active'
+                                                        : 'is-suspended';
+                                                    ?>
+                                                "
+                                            >
+                                                <?php
+                                                echo $is_active
+                                                    ? 'Active'
+                                                    : 'Suspended';
+                                                ?>
+                                            </span>
+
+                                        </td>
+
+                                    </tr>
+
+                                <?php endforeach; ?>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
 
                 <?php endif; ?>
 

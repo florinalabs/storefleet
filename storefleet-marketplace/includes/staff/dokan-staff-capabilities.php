@@ -107,6 +107,7 @@ function storefleet_dokan_staff_permission_is_branch_scoped(
             'products.delete',
 
             'orders.view',
+            'orders.manage',
         ],
         true
     );
@@ -351,6 +352,52 @@ function storefleet_staff_can_delete_dokan_product()
     return
         storefleet_current_staff_can_product_permission(
             'products.delete'
+        );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Order Permission Helpers
+|--------------------------------------------------------------------------
+|
+| Orders use the same StoreFleet operational authorization model:
+|
+| - active StoreFleet staff
+| - active selected branch
+| - SAME role grants permission + branch
+|
+| The existing operational permission helper is safe to reuse because it
+| resolves the current StoreFleet branch and calls the StoreFleet permission
+| engine. The wrapper keeps Orders intent explicit without changing the
+| already-working Products integration.
+|
+*/
+
+function storefleet_current_staff_can_order_permission(
+    $permission
+) {
+    return
+        storefleet_current_staff_can_product_permission(
+            $permission
+        );
+}
+
+
+function storefleet_staff_can_view_dokan_react_orders()
+{
+    return
+        storefleet_current_staff_can_order_permission(
+            'orders.view'
+        );
+}
+
+
+function storefleet_staff_can_manage_dokan_orders()
+{
+    return
+        storefleet_current_staff_can_order_permission(
+            'orders.manage'
         );
 }
 
@@ -1104,6 +1151,251 @@ function storefleet_bridge_dokan_react_staff_product_permissions()
             }
 
             return buttons;
+        }
+    );
+
+})();
+JS;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Execute Before Dokan React Bundle
+    |--------------------------------------------------------------------------
+    */
+
+    wp_add_inline_script(
+        'dokan-react-frontend',
+        $script,
+        'before'
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Dokan React Order Permission Bridge
+|--------------------------------------------------------------------------
+|
+| Dokan's modern Orders router uses:
+|
+| dokan-orders
+|     /orders
+|
+| StoreFleet authorization:
+|
+| /orders
+|     orders.view
+|
+| Order mutations:
+|     orders.manage
+|
+| IMPORTANT:
+|
+| This bridge controls React route availability and exposes the StoreFleet
+| permission state to the browser.
+|
+| It does NOT replace server-side order authorization. REST order filtering,
+| selected-branch enforcement, and mutation checks remain server-side work.
+|
+*/
+
+add_action(
+    'wp_enqueue_scripts',
+    'storefleet_bridge_dokan_react_staff_order_permissions',
+    121
+);
+
+
+function storefleet_bridge_dokan_react_staff_order_permissions()
+{
+    /*
+    |--------------------------------------------------------------------------
+    | Logged-In StoreFleet Staff
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !is_user_logged_in()
+        ||
+        !function_exists(
+            'storefleet_is_staff_user'
+        )
+        ||
+        !storefleet_is_staff_user()
+    ) {
+        return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | React Dashboard Request
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !function_exists(
+            'storefleet_is_dokan_react_dashboard_request'
+        )
+        ||
+        !storefleet_is_dokan_react_dashboard_request()
+    ) {
+        return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Branch Permissions
+    |--------------------------------------------------------------------------
+    */
+
+    $branch_id =
+        storefleet_get_current_dokan_staff_product_branch_id();
+
+    $can_view =
+        storefleet_staff_can_view_dokan_react_orders();
+
+    $can_manage =
+        storefleet_staff_can_manage_dokan_orders();
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ensure Dokan React Bundle
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !wp_script_is(
+            'dokan-react-frontend',
+            'enqueued'
+        )
+    ) {
+        wp_enqueue_script(
+            'dokan-react-frontend'
+        );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | StoreFleet Permission Payload
+    |--------------------------------------------------------------------------
+    */
+
+    $permissions =
+        [
+            'branchId' =>
+                $branch_id,
+
+            'view' =>
+                (bool) $can_view,
+
+            'manage' =>
+                (bool) $can_manage,
+        ];
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Expose Permission Payload Before Dokan React
+    |--------------------------------------------------------------------------
+    */
+
+    wp_add_inline_script(
+        'dokan-react-frontend',
+        'window.storefleetDokanOrderPermissions = ' .
+        wp_json_encode(
+            $permissions
+        ) .
+        ';',
+        'before'
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | React Route Authorization
+    |--------------------------------------------------------------------------
+    |
+    | StoreFleet staff remain non-vendor WordPress users.
+    |
+    | The Dokan React router normally relies on Dokan capabilities. Products
+    | already use the same narrow compatibility bridge. Orders follow that
+    | pattern while StoreFleet remains the source of truth.
+    |
+    */
+
+    $script = <<<'JS'
+(function () {
+    'use strict';
+
+    if (
+        !window.storefleetDokanOrderPermissions
+    ) {
+        return;
+    }
+
+    var permissions =
+        window.storefleetDokanOrderPermissions;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | WordPress Hooks Required
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !window.wp ||
+        !window.wp.hooks ||
+        typeof window.wp.hooks.addFilter !== 'function'
+    ) {
+        return;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Orders React Route
+    |--------------------------------------------------------------------------
+    */
+
+    window.wp.hooks.addFilter(
+        'dokan-dashboard-routes',
+        'storefleet/staff-order-routes',
+        function (routes) {
+            if (!Array.isArray(routes)) {
+                return routes;
+            }
+
+            return routes.map(
+                function (route) {
+                    if (!route) {
+                        return route;
+                    }
+
+                    if (
+                        route.id === 'dokan-orders'
+                    ) {
+                        return Object.assign(
+                            {},
+                            route,
+                            {
+                                capabilities:
+                                    permissions.view
+                                        ? []
+                                        : [
+                                            'storefleet_orders_view_denied'
+                                        ]
+                            }
+                        );
+                    }
+
+                    return route;
+                }
+            );
         }
     );
 

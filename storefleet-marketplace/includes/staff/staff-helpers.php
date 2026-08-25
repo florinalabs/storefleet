@@ -1876,3 +1876,184 @@ function storefleet_get_staff_role_branch_names(
         $branches
     );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Staff Is Assigned To Branch
+|--------------------------------------------------------------------------
+|
+| Used for branch-specific Staff directory screens.
+|
+| This intentionally does not require the staff member to be active so a
+| suspended employee can still appear in the Staff directory.
+|
+| Authorization for the logged-in viewer is handled separately.
+|
+*/
+
+function storefleet_staff_is_assigned_to_branch(
+    $staff_id,
+    $branch_id
+) {
+    $staff_id =
+        absint(
+            $staff_id
+        );
+
+    $branch_id =
+        absint(
+            $branch_id
+        );
+
+    if (
+        !$staff_id
+        ||
+        !$branch_id
+    ) {
+        return false;
+    }
+
+    $staff =
+        storefleet_get_staff(
+            $staff_id
+        );
+
+    if (!$staff) {
+        return false;
+    }
+
+    if (
+        !function_exists(
+            'storefleet_merchant_owns_branch'
+        )
+        ||
+        !storefleet_merchant_owns_branch(
+            absint(
+                $staff->merchant_id
+            ),
+            $branch_id
+        )
+    ) {
+        return false;
+    }
+
+    $roles =
+        storefleet_get_staff_roles_for_staff(
+            $staff_id
+        );
+
+    if (empty($roles)) {
+        return false;
+    }
+
+    foreach (
+        $roles as $role_key
+    ) {
+        $role_branch_ids =
+            storefleet_get_staff_role_branch_ids(
+                $staff_id,
+                $role_key
+            );
+
+        if (
+            in_array(
+                $branch_id,
+                $role_branch_ids,
+                true
+            )
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Merchant Staff For Branch
+|--------------------------------------------------------------------------
+|
+| Returns all merchant staff whose role assignments include the requested
+| branch.
+|
+| Both active and suspended employees are returned so the Staff directory can
+| accurately display account status.
+|
+*/
+
+function storefleet_get_merchant_staff_for_branch(
+    $merchant_id,
+    $branch_id
+) {
+    $merchant_id =
+        absint(
+            $merchant_id
+        );
+
+    $branch_id =
+        absint(
+            $branch_id
+        );
+
+    if (
+        !$merchant_id
+        ||
+        !$branch_id
+    ) {
+        return [];
+    }
+
+    if (
+        !function_exists(
+            'storefleet_merchant_owns_branch'
+        )
+        ||
+        !storefleet_merchant_owns_branch(
+            $merchant_id,
+            $branch_id
+        )
+    ) {
+        return [];
+    }
+
+    $staff =
+        storefleet_get_merchant_staff(
+            $merchant_id
+        );
+
+    if (empty($staff)) {
+        return [];
+    }
+
+    $branch_staff = [];
+
+    foreach (
+        $staff as $member
+    ) {
+        $staff_id =
+            absint(
+                $member->id
+                ?? 0
+            );
+
+        if (!$staff_id) {
+            continue;
+        }
+
+        if (
+            !storefleet_staff_is_assigned_to_branch(
+                $staff_id,
+                $branch_id
+            )
+        ) {
+            continue;
+        }
+
+        $branch_staff[] =
+            $member;
+    }
+
+    return $branch_staff;
+}
