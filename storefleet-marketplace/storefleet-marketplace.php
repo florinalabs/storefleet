@@ -149,7 +149,7 @@ require_once STOREFLEET_PATH .
 
 require_once STOREFLEET_PATH .
     'includes/staff/staff-helpers.php';
-    
+
 require_once STOREFLEET_PATH .
     'includes/staff/staff-portal.php';
 
@@ -158,6 +158,29 @@ require_once STOREFLEET_PATH .
 
 require_once STOREFLEET_PATH .
     'includes/staff/staff-dashboard.php';
+
+require_once STOREFLEET_PATH .
+    'includes/staff/dokan-staff-integration.php';
+
+require_once STOREFLEET_PATH .
+    'includes/staff/dokan-staff-navigation.php';
+
+require_once STOREFLEET_PATH .
+    'includes/staff/dokan-staff-content.php';
+
+require_once STOREFLEET_PATH .
+    'includes/staff/dokan-staff-branch-context.php';
+
+require_once STOREFLEET_PATH .
+    'includes/staff/dokan-staff-capabilities.php';
+
+
+require_once STOREFLEET_PATH .
+    'includes/staff/dokan-staff-wepos.php';
+
+
+require_once STOREFLEET_PATH .
+    'includes/staff/dokan-staff-shell.php';
 
 
 /*
