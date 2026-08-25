@@ -23,9 +23,22 @@ define(
     '0.3.0'
 );
 
+/*
+|--------------------------------------------------------------------------
+| Database Schema Version
+|--------------------------------------------------------------------------
+|
+| 0.3.0 adds:
+|
+| wp_storefleet_product_branches
+|
+| Used for single / multiple product branch availability.
+|
+*/
+
 define(
     'STOREFLEET_DB_VERSION',
-    '0.2.0'
+    '0.3.0'
 );
 
 define(
@@ -113,7 +126,8 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/api/customer-addresses.php';
 
-    /*
+
+/*
 |--------------------------------------------------------------------------
 | Compatibility
 |--------------------------------------------------------------------------
@@ -124,6 +138,7 @@ require_once STOREFLEET_PATH .
 
 require_once STOREFLEET_PATH .
     'includes/compatibility/dokan-product-publishing.php';
+
 
 /*
 |--------------------------------------------------------------------------
@@ -174,10 +189,8 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/staff/dokan-staff-capabilities.php';
 
-
 require_once STOREFLEET_PATH .
     'includes/staff/dokan-staff-wepos.php';
-
 
 require_once STOREFLEET_PATH .
     'includes/staff/dokan-staff-shell.php';
@@ -192,6 +205,25 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/inventory/branch-inventory.php';
 
+
+/*
+|--------------------------------------------------------------------------
+| Products
+|--------------------------------------------------------------------------
+|
+| Product branch availability:
+|
+| - all merchant branches
+| - one selected branch
+| - multiple selected branches
+|
+*/
+
+require_once STOREFLEET_PATH .
+    'includes/products/product-branches.php';
+
+require_once STOREFLEET_PATH .
+    'includes/products/dokan-product-branches.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -234,11 +266,23 @@ register_deactivation_hook(
 |--------------------------------------------------------------------------
 | Database / Role Upgrade Check
 |--------------------------------------------------------------------------
+|
+| Whenever STOREFLEET_DB_VERSION changes, StoreFleet automatically runs
+| storefleet_install_database().
+|
+| dbDelta() will create missing tables and upgrade existing schemas.
+|
 */
 
 add_action(
     'plugins_loaded',
     function () {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Database Upgrade
+        |--------------------------------------------------------------------------
+        */
 
         $installed_version =
             get_option(
@@ -253,7 +297,18 @@ add_action(
             storefleet_install_database();
         }
 
-        if (!get_role('storefleet_staff')) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | WordPress Staff Role
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !get_role(
+                'storefleet_staff'
+            )
+        ) {
             storefleet_install_roles();
         }
     }

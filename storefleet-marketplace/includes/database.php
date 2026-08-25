@@ -56,14 +56,9 @@ function storefleet_install_database()
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
 
-            PRIMARY KEY (id),
-
+            PRIMARY KEY  (id),
             KEY merchant_id (merchant_id),
-
-            UNIQUE KEY merchant_branch_slug (
-                merchant_id,
-                slug
-            )
+            UNIQUE KEY merchant_branch_slug (merchant_id,slug)
         ) {$charset_collate};
     ";
 
@@ -97,15 +92,10 @@ function storefleet_install_database()
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
 
-            PRIMARY KEY (id),
-
+            PRIMARY KEY  (id),
             KEY merchant_id (merchant_id),
             KEY user_id (user_id),
-
-            UNIQUE KEY merchant_staff (
-                merchant_id,
-                user_id
-            )
+            UNIQUE KEY merchant_staff (merchant_id,user_id)
         ) {$charset_collate};
     ";
 
@@ -117,12 +107,12 @@ function storefleet_install_database()
     |
     | Keep this table during the migration period.
     |
-    | Existing staff currently use:
+    | Existing:
     |
     | staff
     |   └── branches
     |
-    | The new model uses:
+    | Current:
     |
     | staff
     |   └── role
@@ -140,15 +130,10 @@ function storefleet_install_database()
             staff_id BIGINT UNSIGNED NOT NULL,
             branch_id BIGINT UNSIGNED NOT NULL,
 
-            PRIMARY KEY (id),
-
+            PRIMARY KEY  (id),
             KEY staff_id (staff_id),
             KEY branch_id (branch_id),
-
-            UNIQUE KEY staff_branch (
-                staff_id,
-                branch_id
-            )
+            UNIQUE KEY staff_branch (staff_id,branch_id)
         ) {$charset_collate};
     ";
 
@@ -158,14 +143,7 @@ function storefleet_install_database()
     | Staff Role Assignments
     |--------------------------------------------------------------------------
     |
-    | One staff member may now have multiple operational roles.
-    |
-    | Example:
-    |
-    | Staff #10
-    |   - cashier
-    |   - inventory_staff
-    |   - order_staff
+    | One staff member may have multiple operational roles.
     |
     | scope_type:
     |
@@ -192,16 +170,11 @@ function storefleet_install_database()
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
 
-            PRIMARY KEY (id),
-
+            PRIMARY KEY  (id),
             KEY staff_id (staff_id),
             KEY role_key (role_key),
             KEY scope_type (scope_type),
-
-            UNIQUE KEY staff_role (
-                staff_id,
-                role_key
-            )
+            UNIQUE KEY staff_role (staff_id,role_key)
         ) {$charset_collate};
     ";
 
@@ -219,7 +192,7 @@ function storefleet_install_database()
     |   - Makati
     |   - BGC
     |
-    | Delivery Staff
+    | Inventory Staff
     |   - Makati
     |
     */
@@ -236,15 +209,76 @@ function storefleet_install_database()
 
             created_at DATETIME NOT NULL,
 
-            PRIMARY KEY (id),
-
+            PRIMARY KEY  (id),
             KEY staff_role_id (staff_role_id),
             KEY branch_id (branch_id),
+            UNIQUE KEY staff_role_branch (staff_role_id,branch_id)
+        ) {$charset_collate};
+    ";
 
-            UNIQUE KEY staff_role_branch (
-                staff_role_id,
-                branch_id
-            )
+
+    /*
+    |--------------------------------------------------------------------------
+    | Product Branch Availability
+    |--------------------------------------------------------------------------
+    |
+    | Stores explicit product → branch assignments.
+    |
+    | IMPORTANT:
+    |
+    | This table represents:
+    |
+    |     "Which branches sell this product?"
+    |
+    | It does NOT represent:
+    |
+    |     "How much stock exists at each branch?"
+    |
+    | Branch inventory remains stored separately in:
+    |
+    | wp_storefleet_branch_inventory
+    |
+    |--------------------------------------------------------------------------
+    | Product Branch Modes
+    |--------------------------------------------------------------------------
+    |
+    | Product mode is stored later using WooCommerce product meta:
+    |
+    | _storefleet_branch_mode
+    |
+    | Values:
+    |
+    | all
+    |     Product is available at every active merchant branch.
+    |
+    | selected
+    |     Product is available only at branch IDs stored in this table.
+    |
+    | Existing products with no meta will later be treated as:
+    |
+    | all
+    |
+    | This keeps existing merchant products backwards compatible.
+    |
+    */
+
+    $product_branches_table =
+        $wpdb->prefix .
+        'storefleet_product_branches';
+
+    $product_branches_sql = "
+        CREATE TABLE {$product_branches_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+
+            product_id BIGINT UNSIGNED NOT NULL,
+            branch_id BIGINT UNSIGNED NOT NULL,
+
+            created_at DATETIME NOT NULL,
+
+            PRIMARY KEY  (id),
+            KEY product_id (product_id),
+            KEY branch_id (branch_id),
+            UNIQUE KEY product_branch (product_id,branch_id)
         ) {$charset_collate};
     ";
 
@@ -253,6 +287,23 @@ function storefleet_install_database()
     |--------------------------------------------------------------------------
     | Branch Inventory
     |--------------------------------------------------------------------------
+    |
+    | Branch inventory is intentionally separate from product availability.
+    |
+    | Example:
+    |
+    | Product availability:
+    |
+    | Coke
+    |   Makati = yes
+    |   BGC    = yes
+    |
+    | Future branch inventory:
+    |
+    | Coke
+    |   Makati = 60
+    |   BGC    = 40
+    |
     */
 
     $inventory_table =
@@ -276,15 +327,10 @@ function storefleet_install_database()
 
             updated_at DATETIME NOT NULL,
 
-            PRIMARY KEY (id),
-
+            PRIMARY KEY  (id),
             KEY branch_id (branch_id),
             KEY product_id (product_id),
-
-            UNIQUE KEY branch_product (
-                branch_id,
-                product_id
-            )
+            UNIQUE KEY branch_product (branch_id,product_id)
         ) {$charset_collate};
     ";
 
@@ -293,6 +339,10 @@ function storefleet_install_database()
     |--------------------------------------------------------------------------
     | Create / Upgrade Tables
     |--------------------------------------------------------------------------
+    |
+    | Keep each dbDelta() call independent so one table definition is easier
+    | to diagnose during development.
+    |
     */
 
     dbDelta(
@@ -313,6 +363,10 @@ function storefleet_install_database()
 
     dbDelta(
         $staff_role_branches_sql
+    );
+
+    dbDelta(
+        $product_branches_sql
     );
 
     dbDelta(
