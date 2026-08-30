@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import ProductPurchase from "@/components/cart/product-purchase";
-import productsData from "@/data/products.json";
 
 
 /*
@@ -12,54 +11,243 @@ import productsData from "@/data/products.json";
 |--------------------------------------------------------------------------
 */
 
-type ProductStore = {
+type ProductCategory = {
   id: number;
   name: string;
   slug: string;
-  verified: boolean;
 };
 
 
-type Product = {
+type ProductMerchant = {
+  id: number;
+  name: string;
+  slug: string;
+};
+
+
+type ProductBranch = {
+  id: number;
+  name: string;
+  slug: string;
+  is_primary: boolean;
+  is_active: boolean;
+  address: string;
+};
+
+
+type PublicProduct = {
   id: number;
   slug: string;
   name: string;
+  type: string;
 
-  category: string;
-  categorySlug: string;
+  short_description: string;
+  description: string;
 
-  price: number;
-  regularPrice: number;
+  sku: string;
   currency: string;
 
-  image: string;
+  price: number;
+  regular_price: number;
 
-  rating: number;
-  reviewCount: number;
-  orderCount: number;
+  on_sale: boolean;
+  campaign: unknown | null;
 
-  stock: number;
+  image_url: string;
+  images: string[];
 
-  store: ProductStore;
+  categories: ProductCategory[];
+
+  merchant: ProductMerchant;
+
+  branch_id: number | null;
+  branch?: ProductBranch | null;
+
+  available: boolean;
+  in_stock: boolean;
+
+  stock_quantity: number | null;
+
+  stock_source:
+    | "branch"
+    | "woocommerce";
 };
 
 
-const products =
-  productsData as Product[];
+type ProductResponse = {
+  success: true;
+
+  generated_at: string;
+  timezone: string;
+
+  branch: ProductBranch | null;
+
+  product: PublicProduct;
+};
+
+
+type ProductsResponse = {
+  success: true;
+
+  products: PublicProduct[];
+};
 
 
 /*
 |--------------------------------------------------------------------------
-| Static Routes
+| StoreFleet API
 |--------------------------------------------------------------------------
 */
 
-export function generateStaticParams() {
-  return products.map(
-    (product) => ({
-      slug: product.slug,
-    })
+function getWordPressUrl() {
+  return (
+    process.env.WORDPRESS_URL ??
+    process.env.WORDPRESS_BASE_URL ??
+    "http://localhost:8080"
+  ).replace(
+    /\/+$/,
+    ""
   );
+}
+
+
+function getInternalApiKey() {
+  const key =
+    process.env
+      .STOREFLEET_INTERNAL_API_KEY;
+
+
+  if (!key) {
+    throw new Error(
+      "STOREFLEET_INTERNAL_API_KEY is not configured."
+    );
+  }
+
+
+  return key;
+}
+
+
+async function storefleetFetch(
+  path: string
+) {
+  return fetch(
+    `${getWordPressUrl()}${path}`,
+    {
+      headers: {
+        "x-storefleet-key":
+          getInternalApiKey(),
+      },
+
+      next: {
+        revalidate: 60,
+      },
+    }
+  );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Get One Product By Slug + Branch
+|--------------------------------------------------------------------------
+*/
+
+async function getProductBySlug(
+  slug: string,
+  branchId?: number
+): Promise<ProductResponse | null> {
+  const params =
+    new URLSearchParams();
+
+
+  if (
+    branchId &&
+    branchId > 0
+  ) {
+    params.set(
+      "branch_id",
+      String(branchId)
+    );
+  }
+
+
+  const query =
+    params.toString();
+
+
+  const response =
+    await storefleetFetch(
+      `/wp-json/storefleet/v1/products/by-slug/${encodeURIComponent(
+        slug
+      )}${query ? `?${query}` : ""}`
+    );
+
+
+  if (response.status === 404) {
+    return null;
+  }
+
+
+  if (!response.ok) {
+    throw new Error(
+      `StoreFleet product API failed with status ${response.status}.`
+    );
+  }
+
+
+  return (
+    await response.json()
+  ) as ProductResponse;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Related Products
+|--------------------------------------------------------------------------
+*/
+
+async function getRelatedProducts(
+  product: PublicProduct
+) {
+  try {
+    const response =
+      await storefleetFetch(
+        "/wp-json/storefleet/v1/products?page=1&per_page=100"
+      );
+
+
+    if (!response.ok) {
+      return [];
+    }
+
+
+    const payload =
+      (await response.json()) as ProductsResponse;
+
+
+    return payload.products
+      .filter(
+        (item) =>
+          item.id !==
+            product.id &&
+          (
+            item.merchant.id ===
+              product.merchant.id ||
+            productsShareCategory(
+              product,
+              item
+            )
+          )
+      )
+      .slice(
+        0,
+        4
+      );
+  } catch {
+    return [];
+  }
 }
 
 
@@ -76,29 +264,43 @@ export async function generateMetadata({
     slug: string;
   }>;
 }): Promise<Metadata> {
-  const { slug } =
+  const {
+    slug,
+  } =
     await params;
 
 
-  const product =
-    products.find(
-      (item) =>
-        item.slug === slug
+  const response =
+    await getProductBySlug(
+      slug
     );
 
 
-  if (!product) {
+  if (!response) {
     return {
       title: "Product Not Found",
     };
   }
 
 
-  return {
-    title: product.name,
+  const {
+    product,
+  } =
+    response;
 
-    description:
-      `${product.name} from ${product.store.name} on StoreFleet.`,
+
+  const description =
+    stripHtml(
+      product.short_description
+    ) ||
+    `${product.name} from ${product.merchant.name} on StoreFleet.`;
+
+
+  return {
+    title:
+      product.name,
+
+    description,
   };
 }
 
@@ -111,53 +313,98 @@ export async function generateMetadata({
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{
     slug: string;
   }>;
+
+  searchParams: Promise<{
+    branch?: string | string[];
+  }>;
 }) {
-  const { slug } =
+  const {
+    slug,
+  } =
     await params;
+
+
+  const query =
+    await searchParams;
+
+
+  const rawBranch =
+    Array.isArray(
+      query.branch
+    )
+      ? query.branch[0]
+      : query.branch;
+
+
+  const parsedBranchId =
+    rawBranch
+      ? Number.parseInt(
+          rawBranch,
+          10
+        )
+      : undefined;
+
+
+  const branchId =
+    parsedBranchId &&
+    Number.isInteger(
+      parsedBranchId
+    ) &&
+    parsedBranchId > 0
+      ? parsedBranchId
+      : undefined;
 
 
   /*
   |--------------------------------------------------------------------------
-  | Find Product
+  | Live Product
   |--------------------------------------------------------------------------
+  |
+  | /shop/product-slug?branch=2
+  |
+  | -> StoreFleet Product API
+  | -> WooCommerce product
+  | -> merchant
+  | -> selected branch
+  | -> branch availability
+  | -> branch stock
+  |
   */
 
-  const product =
-    products.find(
-      (item) =>
-        item.slug === slug
+  const response =
+    await getProductBySlug(
+      slug,
+      branchId
     );
 
 
-  if (!product) {
+  if (!response) {
     notFound();
   }
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Related Products
-  |--------------------------------------------------------------------------
-  */
+  const {
+    product,
+    branch,
+  } =
+    response;
+
+
+  const category =
+    product.categories[0]
+      ?.name ??
+    "Product";
+
 
   const relatedProducts =
-    products
-      .filter(
-        (item) =>
-          item.id !== product.id &&
-          (
-            item.category ===
-              product.category ||
-
-            item.store.id ===
-              product.store.id
-          )
-      )
-      .slice(0, 4);
+    await getRelatedProducts(
+      product
+    );
 
 
   /*
@@ -167,23 +414,54 @@ export default async function ProductPage({
   */
 
   const hasDiscount =
-    product.regularPrice >
+    product.regular_price >
     product.price;
 
 
   const discount =
-    hasDiscount
+    hasDiscount &&
+    product.regular_price > 0
       ? Math.round(
           (
             (
-              product.regularPrice -
+              product.regular_price -
               product.price
             ) /
-            product.regularPrice
+            product.regular_price
           ) *
             100
         )
       : 0;
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Existing ProductPurchase Compatibility
+  |--------------------------------------------------------------------------
+  |
+  | ProductPurchase currently expects a numeric stock value.
+  | Branch-aware cart data will be added to that component in the next patch.
+  |
+  */
+
+  const purchaseStock =
+    product.in_stock
+      ? product.stock_quantity !==
+        null
+        ? Math.max(
+            0,
+            Math.floor(
+              product.stock_quantity
+            )
+          )
+        : 100
+      : 0;
+
+
+  const storeUrl =
+    branch
+      ? `/stores/${product.merchant.slug}?branch=${branch.id}#products`
+      : `/stores/${product.merchant.slug}`;
 
 
   return (
@@ -214,7 +492,7 @@ export default async function ProductPage({
           <span>/</span>
 
           <span className="text-zinc-400">
-            {product.category}
+            {category}
           </span>
 
           <span>/</span>
@@ -234,7 +512,6 @@ export default async function ProductPage({
 
         <div className="mx-auto grid w-full max-w-7xl gap-10 px-5 sm:px-6 lg:grid-cols-[1fr_1fr] lg:gap-16 lg:px-8">
 
-
           {/* Product Image */}
 
           <div>
@@ -243,33 +520,28 @@ export default async function ProductPage({
 
               <div className="relative aspect-square overflow-hidden rounded-3xl bg-zinc-100">
 
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="h-full w-full object-cover"
-                />
-
-
-                {/* Discount */}
-
-                {hasDiscount && (
-
-                  <span className="absolute left-5 top-5 rounded-full bg-red-500 px-3 py-1.5 text-sm font-black text-white shadow-sm">
-                    -{discount}%
-                  </span>
-
+                {product.image_url ? (
+                  <img
+                    src={
+                      product.image_url
+                    }
+                    alt={
+                      product.name
+                    }
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center px-6 text-center font-semibold text-zinc-400">
+                    No product image
+                  </div>
                 )}
 
 
-                {/* Favorite */}
-
-                <button
-                  type="button"
-                  aria-label={`Save ${product.name}`}
-                  className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-xl shadow-sm backdrop-blur transition hover:scale-105"
-                >
-                  ♡
-                </button>
+                {hasDiscount && (
+                  <span className="absolute left-5 top-5 rounded-full bg-red-500 px-3 py-1.5 text-sm font-black text-white shadow-sm">
+                    -{discount}%
+                  </span>
+                )}
 
               </div>
 
@@ -282,14 +554,13 @@ export default async function ProductPage({
 
           <div className="lg:py-3">
 
-
             {/* Category */}
 
             <Link
               href="/shop"
               className="text-xs font-black uppercase tracking-[0.15em] text-violet-600"
             >
-              {product.category}
+              {category}
             </Link>
 
 
@@ -300,50 +571,35 @@ export default async function ProductPage({
             </h1>
 
 
-            {/* Rating / Reviews / Orders */}
+            {/* Merchant / Branch Context */}
 
-            <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            <div className="mt-6 flex flex-wrap items-center gap-2 text-sm">
 
-              <div className="flex items-center gap-1">
-
-                <span className="text-lg text-amber-400">
-                  ★
-                </span>
-
-                <strong>
-                  {product.rating.toFixed(1)}
-                </strong>
-
-              </div>
-
-
-              <span className="text-zinc-300">
-                |
-              </span>
-
-
-              <a
-                href="#reviews"
-                className="text-zinc-500 transition hover:text-violet-600"
+              <Link
+                href={storeUrl}
+                className="font-bold text-zinc-700 transition hover:text-violet-600"
               >
-                {formatNumber(
-                  product.reviewCount
-                )}{" "}
-                reviews
-              </a>
+                {product.merchant.name}
+              </Link>
 
 
-              <span className="text-zinc-300">
-                |
-              </span>
+              {branch && (
+                <>
+                  <span className="text-zinc-300">
+                    /
+                  </span>
 
+                  <span className="rounded-full bg-violet-100 px-3 py-1.5 font-bold text-violet-700">
+                    {branch.name}
+                  </span>
 
-              <span className="text-zinc-500">
-                {formatNumber(
-                  product.orderCount
-                )}{" "}
-                sold
-              </span>
+                  {branch.is_primary && (
+                    <span className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-bold text-zinc-500">
+                      Primary branch
+                    </span>
+                  )}
+                </>
+              )}
 
             </div>
 
@@ -356,53 +612,59 @@ export default async function ProductPage({
 
                 <strong className="text-4xl font-black tracking-[-0.04em] text-violet-700">
                   {formatPrice(
-                    product.price
+                    product.price,
+                    product.currency
                   )}
                 </strong>
 
 
                 {hasDiscount && (
-
                   <span className="text-lg text-zinc-400 line-through">
                     {formatPrice(
-                      product.regularPrice
+                      product.regular_price,
+                      product.currency
                     )}
                   </span>
-
                 )}
 
               </div>
 
 
               {hasDiscount && (
-
                 <div className="mt-2 text-sm font-semibold text-emerald-700">
                   You save{" "}
                   {formatPrice(
-                    product.regularPrice -
-                      product.price
+                    product.regular_price -
+                      product.price,
+                    product.currency
                   )}
                 </div>
-
               )}
 
             </div>
 
 
-            {/* Description */}
+            {/* Short Description */}
 
             <div className="mt-8 border-t border-zinc-200 pt-8">
 
-              <p className="max-w-2xl leading-8 text-zinc-600">
-                {product.name} from{" "}
-                <strong className="font-semibold text-zinc-950">
-                  {product.store.name}
-                </strong>
-                . Order online through
-                StoreFleet and have your
-                purchase prepared by the
-                merchant for local delivery.
-              </p>
+              {product.short_description ? (
+                <div
+                  className="max-w-2xl leading-8 text-zinc-600"
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      product.short_description,
+                  }}
+                />
+              ) : (
+                <p className="max-w-2xl leading-8 text-zinc-600">
+                  {product.name} from{" "}
+                  <strong className="font-semibold text-zinc-950">
+                    {product.merchant.name}
+                  </strong>
+                  .
+                </p>
+              )}
 
             </div>
 
@@ -411,39 +673,7 @@ export default async function ProductPage({
 
             <div className="mt-6">
 
-              {product.stock > 20 ? (
-
-                <div className="flex items-center gap-2 text-sm">
-
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-
-                  <span className="font-bold text-emerald-700">
-                    In stock
-                  </span>
-
-                  <span className="text-zinc-400">
-                    ·
-                  </span>
-
-                  <span className="text-zinc-500">
-                    {product.stock} available
-                  </span>
-
-                </div>
-
-              ) : product.stock > 0 ? (
-
-                <div className="flex items-center gap-2 text-sm">
-
-                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-
-                  <span className="font-bold text-orange-700">
-                    Only {product.stock} left
-                  </span>
-
-                </div>
-
-              ) : (
+              {!product.in_stock ? (
 
                 <div className="flex items-center gap-2 text-sm">
 
@@ -455,34 +685,106 @@ export default async function ProductPage({
 
                 </div>
 
+              ) : product.stock_quantity !==
+                  null &&
+                product.stock_quantity <=
+                  20 ? (
+
+                <div className="flex items-center gap-2 text-sm">
+
+                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+
+                  <span className="font-bold text-orange-700">
+                    Only{" "}
+                    {formatNumber(
+                      product.stock_quantity
+                    )}{" "}
+                    left
+                  </span>
+
+                </div>
+
+              ) : (
+
+                <div className="flex items-center gap-2 text-sm">
+
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+
+                  <span className="font-bold text-emerald-700">
+                    In stock
+                  </span>
+
+
+                  {product.stock_quantity !==
+                    null && (
+                    <>
+                      <span className="text-zinc-400">
+                        ·
+                      </span>
+
+                      <span className="text-zinc-500">
+                        {formatNumber(
+                          product.stock_quantity
+                        )}{" "}
+                        available
+                      </span>
+                    </>
+                  )}
+
+                </div>
+
               )}
 
             </div>
 
 
-            {/* Working Purchase Controls */}
+            {/* Stock Source */}
+
+            {branch && (
+              <p className="mt-2 text-xs text-zinc-400">
+                Availability for{" "}
+                {branch.name}
+              </p>
+            )}
+
+
+            {/* Purchase Controls */}
 
             <ProductPurchase
               product={{
-                id: product.id,
-                slug: product.slug,
-                name: product.name,
+                id:
+                  product.id,
 
-                price: product.price,
+                slug:
+                  product.slug,
+
+                name:
+                  product.name,
+
+                price:
+                  product.price,
+
                 regularPrice:
-                  product.regularPrice,
+                  product.regular_price,
 
-                image: product.image,
-                stock: product.stock,
+                image:
+                  product.image_url,
+
+                stock:
+                  purchaseStock,
 
                 store: {
-                  id: product.store.id,
+                  id:
+                    product.merchant.id,
+
                   name:
-                    product.store.name,
+                    product.merchant.name,
+
                   slug:
-                    product.store.slug,
+                    product.merchant.slug,
+
                   verified:
-                    product.store.verified,
+                    false,
                 },
               }}
             />
@@ -500,47 +802,28 @@ export default async function ProductPage({
               <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
 
                 <Link
-                  href={`/stores/${product.store.slug}`}
+                  href={storeUrl}
                   className="flex min-w-0 items-center gap-3"
                 >
 
-                  {/* Merchant Avatar */}
-
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-100 text-sm font-black text-violet-700">
                     {getInitials(
-                      product.store.name
+                      product.merchant.name
                     )}
                   </div>
 
 
-                  {/* Merchant Name */}
-
                   <div className="min-w-0">
 
-                    <div className="flex items-center gap-2">
-
-                      <strong className="truncate text-base">
-                        {product.store.name}
-                      </strong>
-
-
-                      {product.store
-                        .verified && (
-
-                        <VerifiedBadge />
-
-                      )}
-
-                    </div>
+                    <strong className="truncate text-base">
+                      {product.merchant.name}
+                    </strong>
 
 
                     <span className="mt-1 block text-sm text-zinc-500">
-
-                      {product.store
-                        .verified
-                        ? "StoreFleet Verified"
+                      {branch
+                        ? `Fulfilled by ${branch.name}`
                         : "StoreFleet Merchant"}
-
                     </span>
 
                   </div>
@@ -549,7 +832,7 @@ export default async function ProductPage({
 
 
                 <Link
-                  href={`/stores/${product.store.slug}`}
+                  href={storeUrl}
                   className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-bold transition hover:border-violet-600 hover:text-violet-600"
                 >
                   Visit Store
@@ -575,7 +858,7 @@ export default async function ProductPage({
           <ProductBenefit
             icon="◎"
             title="Local Merchant"
-            text={`Sold by ${product.store.name} through StoreFleet.`}
+            text={`Sold by ${product.merchant.name} through StoreFleet.`}
           />
 
           <ProductBenefit
@@ -586,8 +869,12 @@ export default async function ProductPage({
 
           <ProductBenefit
             icon="→"
-            title="Local Delivery"
-            text="Your merchant prepares the order before local delivery."
+            title="Branch Fulfillment"
+            text={
+              branch
+                ? `Prepared by ${branch.name} for local fulfillment.`
+                : "Prepared by the merchant's active StoreFleet branch."
+            }
           />
 
         </div>
@@ -600,7 +887,6 @@ export default async function ProductPage({
       <section className="py-16">
 
         <div className="mx-auto grid w-full max-w-7xl gap-12 px-5 sm:px-6 lg:grid-cols-[1fr_0.65fr] lg:px-8">
-
 
           {/* Details */}
 
@@ -615,22 +901,20 @@ export default async function ProductPage({
             </h2>
 
 
-            <div className="mt-7 space-y-5 leading-8 text-zinc-600">
-
-              <p>
-                {product.name} is available
-                from {product.store.name} on
-                the StoreFleet marketplace.
+            {product.description ? (
+              <div
+                className="mt-7 max-w-3xl leading-8 text-zinc-600"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    product.description,
+                }}
+              />
+            ) : (
+              <p className="mt-7 max-w-3xl leading-8 text-zinc-600">
+                {product.name} is available from{" "}
+                {product.merchant.name} on StoreFleet.
               </p>
-
-              <p>
-                Products displayed on
-                StoreFleet are fulfilled by
-                their respective local
-                merchants.
-              </p>
-
-            </div>
+            )}
 
           </div>
 
@@ -648,157 +932,45 @@ export default async function ProductPage({
 
               <InfoRow
                 label="Category"
-                value={
-                  product.category
-                }
+                value={category}
               />
 
               <InfoRow
                 label="Store"
                 value={
-                  product.store.name
+                  product.merchant.name
                 }
               />
+
+              <InfoRow
+                label="Branch"
+                value={
+                  branch?.name ??
+                  "Primary branch"
+                }
+              />
+
+
+              {product.sku && (
+                <InfoRow
+                  label="SKU"
+                  value={product.sku}
+                />
+              )}
+
 
               <InfoRow
                 label="Availability"
                 value={
-                  product.stock > 0
-                    ? `${product.stock} in stock`
+                  product.in_stock
+                    ? product.stock_quantity !==
+                      null
+                      ? `${formatNumber(
+                          product.stock_quantity
+                        )} in stock`
+                      : "In stock"
                     : "Out of stock"
                 }
-              />
-
-              <InfoRow
-                label="Orders"
-                value={`${formatNumber(
-                  product.orderCount
-                )} sold`}
-              />
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* Reviews */}
-
-      <section
-        id="reviews"
-        className="scroll-mt-32 border-t border-zinc-200 bg-zinc-50 py-16"
-      >
-
-        <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
-
-
-          {/* Heading */}
-
-          <span className="text-xs font-black uppercase tracking-[0.15em] text-violet-600">
-            Customer feedback
-          </span>
-
-
-          <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
-            Ratings & reviews
-          </h2>
-
-
-          <div className="mt-9 grid gap-8 lg:grid-cols-[300px_1fr]">
-
-
-            {/* Rating Summary */}
-
-            <div className="rounded-3xl bg-zinc-950 p-8 text-white">
-
-              <div className="text-6xl font-black">
-                {product.rating.toFixed(1)}
-              </div>
-
-
-              <div className="mt-4 flex gap-1 text-xl text-amber-400">
-                ★★★★★
-              </div>
-
-
-              <p className="mt-4 text-sm text-zinc-400">
-                Based on{" "}
-                {formatNumber(
-                  product.reviewCount
-                )}{" "}
-                reviews
-              </p>
-
-
-              <div className="mt-8 space-y-3">
-
-                <RatingBar
-                  rating="5"
-                  percentage={86}
-                />
-
-                <RatingBar
-                  rating="4"
-                  percentage={10}
-                />
-
-                <RatingBar
-                  rating="3"
-                  percentage={3}
-                />
-
-                <RatingBar
-                  rating="2"
-                  percentage={1}
-                />
-
-                <RatingBar
-                  rating="1"
-                  percentage={0}
-                />
-
-              </div>
-
-            </div>
-
-
-            {/* Hardcoded Reviews */}
-
-            <div className="grid gap-4 md:grid-cols-2">
-
-              <ReviewCard
-                name="Maria S."
-                rating={5}
-                date="2 weeks ago"
-                title="Excellent product"
-                text={`Very happy with my order from ${product.store.name}. The product arrived in excellent condition and matched the listing.`}
-              />
-
-              <ReviewCard
-                name="John R."
-                rating={5}
-                date="3 weeks ago"
-                title="Would order again"
-                text="Ordering was easy and the product quality was very good. The whole StoreFleet experience was smooth."
-              />
-
-              <ReviewCard
-                name="Angela P."
-                rating={4}
-                date="1 month ago"
-                title="Good quality"
-                text="The item was packed properly and arrived as expected. Good value for the price."
-              />
-
-              <ReviewCard
-                name="Marco D."
-                rating={5}
-                date="1 month ago"
-                title="Great local seller"
-                text={`Fast preparation from ${product.store.name}. I would recommend this merchant.`}
               />
 
             </div>
@@ -812,7 +984,8 @@ export default async function ProductPage({
 
       {/* Related Products */}
 
-      {relatedProducts.length > 0 && (
+      {relatedProducts.length >
+        0 && (
 
         <section className="border-t border-zinc-200 py-16">
 
@@ -847,12 +1020,12 @@ export default async function ProductPage({
 
               {relatedProducts.map(
                 (item) => (
-
                   <RelatedProduct
-                    key={item.id}
+                    key={
+                      `${item.id}-${item.branch_id ?? "default"}`
+                    }
                     product={item}
                   />
-
                 )
               )}
 
@@ -938,117 +1111,6 @@ function InfoRow({
 
 /*
 |--------------------------------------------------------------------------
-| Rating Bar
-|--------------------------------------------------------------------------
-*/
-
-function RatingBar({
-  rating,
-  percentage,
-}: {
-  rating: string;
-  percentage: number;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-
-      <span className="w-4 text-xs text-zinc-400">
-        {rating}
-      </span>
-
-
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-800">
-
-        <div
-          className="h-full rounded-full bg-amber-400"
-          style={{
-            width: `${percentage}%`,
-          }}
-        />
-
-      </div>
-
-
-      <span className="w-8 text-right text-xs text-zinc-500">
-        {percentage}%
-      </span>
-
-    </div>
-  );
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Review Card
-|--------------------------------------------------------------------------
-*/
-
-function ReviewCard({
-  name,
-  rating,
-  date,
-  title,
-  text,
-}: {
-  name: string;
-  rating: number;
-  date: string;
-  title: string;
-  text: string;
-}) {
-  return (
-    <article className="rounded-3xl border border-zinc-200 bg-white p-6">
-
-      <div className="flex items-start justify-between gap-4">
-
-        <div className="text-sm text-amber-400">
-          {"★".repeat(rating)}
-        </div>
-
-
-        <span className="text-xs text-zinc-400">
-          {date}
-        </span>
-
-      </div>
-
-
-      <h3 className="mt-4 font-black">
-        {title}
-      </h3>
-
-
-      <p className="mt-3 leading-7 text-zinc-600">
-        {text}
-      </p>
-
-
-      <div className="mt-5 flex items-center gap-2">
-
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-xs font-black">
-          {getInitials(name)}
-        </div>
-
-
-        <strong className="text-sm">
-          {name}
-        </strong>
-
-
-        <span className="text-xs text-zinc-400">
-          Verified purchase
-        </span>
-
-      </div>
-
-    </article>
-  );
-}
-
-
-/*
-|--------------------------------------------------------------------------
 | Related Product
 |--------------------------------------------------------------------------
 */
@@ -1056,10 +1118,28 @@ function ReviewCard({
 function RelatedProduct({
   product,
 }: {
-  product: Product;
+  product: PublicProduct;
 }) {
+  const category =
+    product.categories[0]
+      ?.name ??
+    "Product";
+
+
+  const branchId =
+    product.branch_id ??
+    product.branch?.id ??
+    null;
+
+
+  const href =
+    branchId
+      ? `/shop/${product.slug}?branch=${branchId}`
+      : `/shop/${product.slug}`;
+
+
   const hasDiscount =
-    product.regularPrice >
+    product.regular_price >
     product.price;
 
 
@@ -1067,16 +1147,26 @@ function RelatedProduct({
     <article className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white transition hover:-translate-y-1 hover:shadow-lg hover:shadow-zinc-950/5">
 
       <Link
-        href={`/shop/${product.slug}`}
+        href={href}
         className="block aspect-square overflow-hidden bg-zinc-100"
       >
 
-        <img
-          src={product.image}
-          alt={product.name}
-          loading="lazy"
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
-        />
+        {product.image_url ? (
+          <img
+            src={
+              product.image_url
+            }
+            alt={
+              product.name
+            }
+            loading="lazy"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-zinc-400">
+            No product image
+          </div>
+        )}
 
       </Link>
 
@@ -1084,83 +1174,48 @@ function RelatedProduct({
       <div className="p-4">
 
         <span className="text-xs font-semibold text-zinc-400">
-          {product.category}
+          {category}
         </span>
 
 
         <Link
-          href={`/shop/${product.slug}`}
+          href={href}
         >
-
           <h3 className="mt-1.5 line-clamp-2 min-h-[40px] text-sm font-bold leading-5 transition group-hover:text-violet-600">
             {product.name}
           </h3>
-
         </Link>
-
-
-        <div className="mt-3 flex items-center gap-2 text-xs">
-
-          <span className="text-amber-400">
-            ★
-          </span>
-
-          <strong>
-            {product.rating.toFixed(1)}
-          </strong>
-
-          <span className="text-zinc-400">
-            {formatNumber(
-              product.orderCount
-            )}{" "}
-            sold
-          </span>
-
-        </div>
 
 
         <div className="mt-4 flex items-baseline gap-2">
 
           <strong className="text-lg font-black text-violet-700">
             {formatPrice(
-              product.price
+              product.price,
+              product.currency
             )}
           </strong>
 
 
           {hasDiscount && (
-
             <span className="text-xs text-zinc-400 line-through">
               {formatPrice(
-                product.regularPrice
+                product.regular_price,
+                product.currency
               )}
             </span>
-
           )}
 
+        </div>
+
+
+        <div className="mt-3 text-xs text-zinc-500">
+          {product.merchant.name}
         </div>
 
       </div>
 
     </article>
-  );
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Verified Badge
-|--------------------------------------------------------------------------
-*/
-
-function VerifiedBadge() {
-  return (
-    <span
-      title="StoreFleet Verified"
-      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[10px] font-black text-white"
-    >
-      ✓
-    </span>
   );
 }
 
@@ -1172,13 +1227,16 @@ function VerifiedBadge() {
 */
 
 function formatPrice(
-  value: number
+  value: number,
+  currency = "PHP"
 ) {
   return new Intl.NumberFormat(
     "en-PH",
     {
       style: "currency",
-      currency: "PHP",
+      currency:
+        currency ||
+        "PHP",
       minimumFractionDigits: 0,
     }
   ).format(value);
@@ -1214,4 +1272,42 @@ function getInitials(
     )
     .join("")
     .toUpperCase();
+}
+
+
+function stripHtml(
+  value: string
+) {
+  return value
+    .replace(
+      /<[^>]*>/g,
+      " "
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+}
+
+
+function productsShareCategory(
+  first: PublicProduct,
+  second: PublicProduct
+) {
+  const categoryIds =
+    new Set(
+      first.categories.map(
+        (category) =>
+          category.id
+      )
+    );
+
+
+  return second.categories.some(
+    (category) =>
+      categoryIds.has(
+        category.id
+      )
+  );
 }

@@ -5,6 +5,8 @@ import CheckoutAddressSelector, {
   type CheckoutAddress,
 } from "@/components/checkout/checkout-address-selector";
 
+import CheckoutOrderSummary from "@/components/checkout/checkout-order-summary";
+
 import {
   getCustomerSessionToken,
   storefleetCustomerRequest,
@@ -214,7 +216,7 @@ export default async function CheckoutPage() {
 
         {/* Checkout Layout */}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
 
           {/* Checkout Details */}
 
@@ -348,85 +350,9 @@ export default async function CheckoutPage() {
           </div>
 
 
-          {/* Order Summary */}
+          {/* Live Cart Order Summary */}
 
-          <aside>
-
-            <div className="sticky top-24 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-
-              <h2 className="text-lg font-bold text-zinc-950">
-                Order Summary
-              </h2>
-
-
-              <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Your cart items and checkout
-                totals will appear here.
-              </p>
-
-
-              <div className="my-6 border-t border-zinc-200" />
-
-
-              <div className="space-y-4">
-
-                <SummaryRow
-                  label="Subtotal"
-                  value="—"
-                />
-
-
-                <SummaryRow
-                  label="Delivery"
-                  value="—"
-                />
-
-              </div>
-
-
-              <div className="my-6 border-t border-zinc-200" />
-
-
-              <div className="flex items-center justify-between">
-
-                <span className="font-bold text-zinc-950">
-                  Total
-                </span>
-
-
-                <span className="text-lg font-black text-zinc-950">
-                  —
-                </span>
-
-              </div>
-
-
-              <button
-                type="button"
-                disabled
-                className="mt-6 flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-zinc-950 px-5 py-3.5 text-sm font-semibold text-white opacity-40"
-              >
-                Place Order
-              </button>
-
-
-              <p className="mt-3 text-center text-xs leading-5 text-zinc-500">
-                Order placement will be enabled
-                when delivery and payment
-                integration is complete.
-              </p>
-
-
-              <Link
-                href="/cart"
-                className="mt-5 flex items-center justify-center text-sm font-semibold text-zinc-600 transition hover:text-violet-600"
-              >
-                ← Return to cart
-              </Link>
-
-            </div>
-
-          </aside>
+          <CheckoutOrderSummary />
 
         </div>
 
@@ -500,36 +426,6 @@ function CheckoutField({
       <p className="mt-2 break-words text-sm font-semibold text-zinc-900">
         {value}
       </p>
-
-    </div>
-  );
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Summary Row
-|--------------------------------------------------------------------------
-*/
-
-function SummaryRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-
-      <span className="text-zinc-500">
-        {label}
-      </span>
-
-
-      <span className="font-semibold text-zinc-900">
-        {value}
-      </span>
 
     </div>
   );
