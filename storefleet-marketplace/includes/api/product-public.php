@@ -188,9 +188,9 @@ add_action(
         |
         | GET /wp-json/storefleet/v1/products
         |
-        | Each product is resolved against that merchant's primary active
-        | branch so the marketplace never shows a product without a fulfillment
-        | branch context.
+        | Each product is returned once with every active fulfillment branch
+        | where that product is available, including branch coordinates and
+        | branch-specific stock for nearest-location filtering.
         |
         */
 
@@ -225,6 +225,53 @@ add_action(
 
                         'default' =>
                             48,
+
+                        'sanitize_callback' =>
+                            'absint',
+                    ],
+                ],
+            ]
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | One Product By Slug + Branch
+        |--------------------------------------------------------------------------
+        |
+        | GET /wp-json/storefleet/v1/products/by-slug/barako-coffee-beans-250g
+        | GET /wp-json/storefleet/v1/products/by-slug/barako-coffee-beans-250g?branch_id=2
+        |
+        | If branch_id is omitted, StoreFleet resolves the merchant's primary
+        | active branch, then falls back to the first active branch.
+        |
+        */
+
+        register_rest_route(
+            'storefleet/v1',
+            '/products/by-slug/(?P<product_slug>[a-zA-Z0-9-]+)',
+            [
+                'methods' =>
+                    WP_REST_Server::READABLE,
+
+                'callback' =>
+                    'storefleet_api_get_public_product_by_slug',
+
+                'permission_callback' =>
+                    'storefleet_api_public_product_permission',
+
+                'args' => [
+                    'product_slug' => [
+                        'required' =>
+                            true,
+
+                        'sanitize_callback' =>
+                            'sanitize_title',
+                    ],
+
+                    'branch_id' => [
+                        'required' =>
+                            false,
 
                         'sanitize_callback' =>
                             'absint',
@@ -625,41 +672,76 @@ function storefleet_api_get_public_marketplace_products(
         }
 
 
-        $branch =
-            storefleet_api_product_resolve_branch(
-                $merchant_id,
-                0
-            );
-
-
-        if (
-            is_wp_error($branch)
-            ||
-            !$branch
-        ) {
-            continue;
-        }
-
-
-        if (
-            !storefleet_api_product_is_available_at_branch(
-                $product_id,
-                absint(
-                    $branch->id
-                )
-            )
-        ) {
-            continue;
-        }
-
-
         $product =
             wc_get_product(
                 $product_id
             );
 
 
-        if (!$product) {
+        if (
+            !$product
+            ||
+            $product->get_status() !==
+                'publish'
+        ) {
+            continue;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Every Active Fulfillment Branch
+        |--------------------------------------------------------------------------
+        |
+        | The marketplace returns the product once. "branches" contains every
+        | active merchant branch where the product is assigned/available.
+        |
+        | This gives Next.js enough information to:
+        |
+        | - search by branch/address
+        | - filter by branch
+        | - calculate nearest branch from customer coordinates
+        | - open /shop/{slug}?branch={branch_id}
+        |
+        */
+
+        $branch_objects =
+            storefleet_api_product_get_available_branch_objects(
+                $product_id,
+                $merchant_id
+            );
+
+
+        if (empty($branch_objects)) {
+            continue;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Default Marketplace Branch
+        |--------------------------------------------------------------------------
+        |
+        | Prefer:
+        |
+        | 1. primary branch that is in stock
+        | 2. first in-stock branch
+        | 3. primary branch
+        | 4. first available branch
+        |
+        | The frontend may replace this with the customer's nearest in-stock
+        | branch after geolocation/address resolution.
+        |
+        */
+
+        $branch =
+            storefleet_api_product_choose_default_branch(
+                $product,
+                $branch_objects
+            );
+
+
+        if (!$branch) {
             continue;
         }
 
@@ -675,6 +757,19 @@ function storefleet_api_get_public_marketplace_products(
         $prepared['branch'] =
             storefleet_api_product_prepare_branch_summary(
                 $branch
+            );
+
+
+        $prepared['branches'] =
+            storefleet_api_product_prepare_available_branches(
+                $product,
+                $branch_objects
+            );
+
+
+        $prepared['branch_count'] =
+            count(
+                $prepared['branches']
             );
 
 
@@ -737,6 +832,299 @@ function storefleet_api_get_public_marketplace_products(
     return $response;
 }
 
+/*
+|--------------------------------------------------------------------------
+| One Public Product By Slug
+|--------------------------------------------------------------------------
+|
+| Returns one published WooCommerce product in a StoreFleet branch context.
+|
+| Explicit branch_id:
+| - branch must belong to the product merchant
+| - branch must be active
+| - product must be available at the branch
+|
+| Omitted branch_id:
+| - primary active branch
+| - otherwise first active branch
+|
+*/
+
+function storefleet_api_get_public_product_by_slug(
+    WP_REST_Request $request
+) {
+    $product_slug =
+        sanitize_title(
+            (string)
+            $request[
+                'product_slug'
+            ]
+        );
+
+
+    if ($product_slug === '') {
+        return new WP_Error(
+            'storefleet_invalid_product_slug',
+            'A valid product slug is required.',
+            [
+                'status' =>
+                    400,
+            ]
+        );
+    }
+
+
+    if (
+        !function_exists(
+            'wc_get_product'
+        )
+    ) {
+        return new WP_Error(
+            'storefleet_woocommerce_unavailable',
+            'WooCommerce is unavailable.',
+            [
+                'status' =>
+                    503,
+            ]
+        );
+    }
+
+
+    $post =
+        get_page_by_path(
+            $product_slug,
+            OBJECT,
+            'product'
+        );
+
+
+    if (
+        !$post
+        ||
+        $post->post_status !==
+            'publish'
+    ) {
+        return new WP_Error(
+            'storefleet_product_not_found',
+            'Product not found.',
+            [
+                'status' =>
+                    404,
+            ]
+        );
+    }
+
+
+    $product_id =
+        absint(
+            $post->ID
+        );
+
+
+    $product =
+        wc_get_product(
+            $product_id
+        );
+
+
+    if (
+        !$product
+        ||
+        $product->get_status() !==
+            'publish'
+    ) {
+        return new WP_Error(
+            'storefleet_product_not_found',
+            'Product not found.',
+            [
+                'status' =>
+                    404,
+            ]
+        );
+    }
+
+
+    $merchant_id =
+        absint(
+            get_post_field(
+                'post_author',
+                $product_id
+            )
+        );
+
+
+    if (!$merchant_id) {
+        return new WP_Error(
+            'storefleet_product_merchant_not_found',
+            'Product merchant was not found.',
+            [
+                'status' =>
+                    404,
+            ]
+        );
+    }
+
+
+    $merchant_error =
+        storefleet_api_product_validate_public_merchant(
+            $merchant_id
+        );
+
+
+    if (is_wp_error($merchant_error)) {
+        return $merchant_error;
+    }
+
+
+    $branch_objects =
+        storefleet_api_product_get_available_branch_objects(
+            $product_id,
+            $merchant_id
+        );
+
+
+    if (empty($branch_objects)) {
+        return new WP_Error(
+            'storefleet_product_branch_not_found',
+            'No active fulfillment branch is available for this product.',
+            [
+                'status' =>
+                    404,
+            ]
+        );
+    }
+
+
+    $requested_branch_id =
+        absint(
+            $request->get_param(
+                'branch_id'
+            )
+        );
+
+
+    if ($requested_branch_id) {
+        $branch_result =
+            storefleet_api_product_resolve_branch(
+                $merchant_id,
+                $requested_branch_id
+            );
+
+
+        if (is_wp_error($branch_result)) {
+            return $branch_result;
+        }
+
+
+        $branch =
+            $branch_result;
+
+
+        if (
+            !$branch
+            ||
+            !storefleet_api_product_is_available_at_branch(
+                $product_id,
+                absint(
+                    $branch->id
+                )
+            )
+        ) {
+            return new WP_Error(
+                'storefleet_product_not_available_at_branch',
+                'Product is not available at the selected branch.',
+                [
+                    'status' =>
+                        404,
+                ]
+            );
+        }
+    } else {
+        $branch =
+            storefleet_api_product_choose_default_branch(
+                $product,
+                $branch_objects
+            );
+    }
+
+
+    if (!$branch) {
+        return new WP_Error(
+            'storefleet_product_branch_not_found',
+            'No active fulfillment branch is available for this product.',
+            [
+                'status' =>
+                    404,
+            ]
+        );
+    }
+
+
+    $data =
+        storefleet_api_prepare_public_product(
+            $product,
+            $merchant_id,
+            $branch
+        );
+
+
+    $data['branch'] =
+        storefleet_api_product_prepare_branch_summary(
+            $branch
+        );
+
+
+    $data['branches'] =
+        storefleet_api_product_prepare_available_branches(
+            $product,
+            $branch_objects
+        );
+
+
+    $data['branch_count'] =
+        count(
+            $data['branches']
+        );
+
+
+    $response =
+        new WP_REST_Response(
+            [
+                'success' =>
+                    true,
+
+                'generated_at' =>
+                    current_datetime()
+                        ->format(
+                            DATE_ATOM
+                        ),
+
+                'timezone' =>
+                    wp_timezone_string(),
+
+                'branch' =>
+                    storefleet_api_product_prepare_branch_summary(
+                        $branch
+                    ),
+
+                'branches' =>
+                    $data['branches'],
+
+                'product' =>
+                    $data,
+            ],
+            200
+        );
+
+
+    $response->header(
+        'Cache-Control',
+        'public, max-age=60, s-maxage=60'
+    );
+
+
+    return $response;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -838,39 +1226,82 @@ function storefleet_api_get_public_product(
     }
 
 
-    $branch_result =
-        storefleet_api_product_resolve_branch(
-            $merchant_id,
-            absint(
-                $request->get_param(
-                    'branch_id'
-                )
+    $branch_objects =
+        storefleet_api_product_get_available_branch_objects(
+            $product_id,
+            $merchant_id
+        );
+
+
+    if (empty($branch_objects)) {
+        return new WP_Error(
+            'storefleet_product_branch_not_found',
+            'No active fulfillment branch is available for this product.',
+            [
+                'status' =>
+                    404,
+            ]
+        );
+    }
+
+
+    $requested_branch_id =
+        absint(
+            $request->get_param(
+                'branch_id'
             )
         );
 
 
-    if (is_wp_error($branch_result)) {
-        return $branch_result;
+    if ($requested_branch_id) {
+        $branch_result =
+            storefleet_api_product_resolve_branch(
+                $merchant_id,
+                $requested_branch_id
+            );
+
+
+        if (is_wp_error($branch_result)) {
+            return $branch_result;
+        }
+
+
+        $branch =
+            $branch_result;
+
+
+        if (
+            !$branch
+            ||
+            !storefleet_api_product_is_available_at_branch(
+                $product_id,
+                absint(
+                    $branch->id
+                )
+            )
+        ) {
+            return new WP_Error(
+                'storefleet_product_not_available_at_branch',
+                'Product is not available at the selected branch.',
+                [
+                    'status' =>
+                        404,
+                ]
+            );
+        }
+    } else {
+        $branch =
+            storefleet_api_product_choose_default_branch(
+                $product,
+                $branch_objects
+            );
     }
 
 
-    $branch =
-        $branch_result;
-
-
-    if (
-        $branch
-        &&
-        !storefleet_api_product_is_available_at_branch(
-            $product_id,
-            absint(
-                $branch->id
-            )
-        )
-    ) {
+    if (!$branch) {
         return new WP_Error(
-            'storefleet_product_not_available_at_branch',
-            'Product is not available at the selected branch.',
+            'storefleet_product_branch_not_found',
+            'No active fulfillment branch is available for this product.',
             [
                 'status' =>
                     404,
@@ -884,6 +1315,25 @@ function storefleet_api_get_public_product(
             $product,
             $merchant_id,
             $branch
+        );
+
+
+    $data['branch'] =
+        storefleet_api_product_prepare_branch_summary(
+            $branch
+        );
+
+
+    $data['branches'] =
+        storefleet_api_product_prepare_available_branches(
+            $product,
+            $branch_objects
+        );
+
+
+    $data['branch_count'] =
+        count(
+            $data['branches']
         );
 
 
@@ -907,6 +1357,9 @@ function storefleet_api_get_public_product(
                         $branch
                     ),
 
+                'branches' =>
+                    $data['branches'],
+
                 'product' =>
                     $data,
             ],
@@ -922,7 +1375,6 @@ function storefleet_api_get_public_product(
 
     return $response;
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -1479,6 +1931,312 @@ function storefleet_api_product_is_available_at_branch(
 
 
     return !empty($exists);
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Available Branch Objects For Product
+|--------------------------------------------------------------------------
+|
+| Returns every active merchant branch where the product is assigned.
+|
+*/
+
+function storefleet_api_product_get_available_branch_objects(
+    $product_id,
+    $merchant_id
+) {
+    $product_id =
+        absint(
+            $product_id
+        );
+
+
+    $merchant_id =
+        absint(
+            $merchant_id
+        );
+
+
+    if (
+        !$product_id
+        ||
+        !$merchant_id
+        ||
+        !function_exists(
+            'storefleet_get_merchant_branches'
+        )
+    ) {
+        return array();
+    }
+
+
+    $merchant_branches =
+        storefleet_get_merchant_branches(
+            $merchant_id,
+            true
+        );
+
+
+    if (empty($merchant_branches)) {
+        return array();
+    }
+
+
+    $available_branches =
+        array();
+
+
+    foreach (
+        $merchant_branches as
+        $branch
+    ) {
+        if (
+            !$branch
+            ||
+            empty(
+                $branch->id
+            )
+        ) {
+            continue;
+        }
+
+
+        if (
+            !storefleet_api_product_is_available_at_branch(
+                $product_id,
+                absint(
+                    $branch->id
+                )
+            )
+        ) {
+            continue;
+        }
+
+
+        $available_branches[] =
+            $branch;
+    }
+
+
+    usort(
+        $available_branches,
+        function (
+            $a,
+            $b
+        ) {
+            $a_primary =
+                !empty(
+                    $a->is_primary
+                )
+                    ? 1
+                    : 0;
+
+
+            $b_primary =
+                !empty(
+                    $b->is_primary
+                )
+                    ? 1
+                    : 0;
+
+
+            if (
+                $a_primary !==
+                $b_primary
+            ) {
+                return
+                    $b_primary <=>
+                    $a_primary;
+            }
+
+
+            return
+                strcasecmp(
+                    (string)
+                    $a->name,
+                    (string)
+                    $b->name
+                );
+        }
+    );
+
+
+    return $available_branches;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Choose Default Product Branch
+|--------------------------------------------------------------------------
+|
+| Marketplace/product pages need a branch even before customer location is
+| known. Prefer an in-stock branch while keeping the primary branch priority.
+|
+*/
+
+function storefleet_api_product_choose_default_branch(
+    WC_Product $product,
+    array $branches
+) {
+    if (empty($branches)) {
+        return null;
+    }
+
+
+    $primary =
+        null;
+
+
+    $first_in_stock =
+        null;
+
+
+    foreach (
+        $branches as
+        $branch
+    ) {
+        if (!$branch) {
+            continue;
+        }
+
+
+        if (
+            !$primary
+            &&
+            !empty(
+                $branch->is_primary
+            )
+        ) {
+            $primary =
+                $branch;
+        }
+
+
+        $stock =
+            storefleet_api_product_public_stock(
+                $product,
+                $branch
+            );
+
+
+        if (
+            !empty(
+                $stock['available']
+            )
+            &&
+            !empty(
+                $stock['in_stock']
+            )
+        ) {
+            if (
+                !empty(
+                    $branch->is_primary
+                )
+            ) {
+                return $branch;
+            }
+
+
+            if (!$first_in_stock) {
+                $first_in_stock =
+                    $branch;
+            }
+        }
+    }
+
+
+    if ($first_in_stock) {
+        return $first_in_stock;
+    }
+
+
+    if ($primary) {
+        return $primary;
+    }
+
+
+    return $branches[0];
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Prepare All Product Branches
+|--------------------------------------------------------------------------
+|
+| Each branch includes coordinates and its own stock state so Next.js can
+| calculate nearest fulfillment without duplicating the product card.
+|
+*/
+
+function storefleet_api_product_prepare_available_branches(
+    WC_Product $product,
+    array $branches
+) {
+    $prepared =
+        array();
+
+
+    foreach (
+        $branches as
+        $branch
+    ) {
+        if (!$branch) {
+            continue;
+        }
+
+
+        $summary =
+            storefleet_api_product_prepare_branch_summary(
+                $branch
+            );
+
+
+        if (!$summary) {
+            continue;
+        }
+
+
+        $stock =
+            storefleet_api_product_public_stock(
+                $product,
+                $branch
+            );
+
+
+        $summary['available'] =
+            !empty(
+                $stock['available']
+            );
+
+
+        $summary['in_stock'] =
+            !empty(
+                $stock['in_stock']
+            );
+
+
+        $summary['stock_quantity'] =
+            $stock[
+                'stock_quantity'
+            ];
+
+
+        $summary['stock_source'] =
+            $stock[
+                'source'
+            ];
+
+
+        $prepared[] =
+            $summary;
+    }
+
+
+    return $prepared;
 }
 
 
@@ -2370,6 +3128,28 @@ function storefleet_api_product_prepare_branch_summary(
                 ', ',
                 $address
             ),
+
+        'location' => [
+            'latitude' =>
+                isset(
+                    $branch->latitude
+                )
+                &&
+                $branch->latitude !== null
+                    ? (float)
+                    $branch->latitude
+                    : null,
+
+            'longitude' =>
+                isset(
+                    $branch->longitude
+                )
+                &&
+                $branch->longitude !== null
+                    ? (float)
+                    $branch->longitude
+                    : null,
+        ],
     ];
 }
 
