@@ -3,7 +3,7 @@
 /**
  * Plugin Name: StoreFleet Marketplace
  * Description: Core marketplace functionality for StoreFleet.
- * Version: 0.3.0
+ * Version: 0.4.0
  * Author: StoreFleet
  */
 
@@ -20,15 +20,28 @@ if (!defined('ABSPATH')) {
 
 define(
     'STOREFLEET_VERSION',
-    '0.3.0'
+    '0.4.0'
 );
+
 
 /*
 |--------------------------------------------------------------------------
 | Database Schema Version
 |--------------------------------------------------------------------------
 |
-| 0.3.0 adds:
+| 0.4.0 adds:
+|
+| wp_storefleet_branch_hours
+|
+| Branch-specific opening hours are edited from the Dokan Store settings
+| tab and stored per branch so each merchant location can have its own
+| operating schedule.
+|
+| 0.3.1 added:
+|
+| Primary branch support for wp_storefleet_branches.
+|
+| 0.3.0 added:
 |
 | wp_storefleet_product_branches
 |
@@ -38,7 +51,7 @@ define(
 
 define(
     'STOREFLEET_DB_VERSION',
-    '0.3.0'
+    '0.4.0'
 );
 
 define(
@@ -126,6 +139,12 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/api/customer-addresses.php';
 
+require_once STOREFLEET_PATH .
+    'includes/api/store-public.php';
+
+require_once STOREFLEET_PATH .
+    'includes/api/product-public.php';
+
 
 /*
 |--------------------------------------------------------------------------
@@ -150,10 +169,17 @@ require_once STOREFLEET_PATH .
     'includes/branches/branch-helpers.php';
 
 require_once STOREFLEET_PATH .
+    'includes/branches/branch-hours.php';
+
+require_once STOREFLEET_PATH .
     'includes/branches/branch-actions.php';
 
 require_once STOREFLEET_PATH .
     'includes/branches/branch-dashboard.php';
+
+require_once STOREFLEET_PATH .
+    'includes/branches/branch-store-settings.php';
+
 
 /*
 |--------------------------------------------------------------------------
@@ -194,6 +220,7 @@ require_once STOREFLEET_PATH .
 require_once STOREFLEET_PATH .
     'includes/staff/dokan-staff-shell.php';
 
+
 /*
 |--------------------------------------------------------------------------
 | Delivery
@@ -203,7 +230,6 @@ require_once STOREFLEET_PATH .
 |
 */
 
-
 require_once STOREFLEET_PATH .
     'includes/delivery/delivery-helpers.php';
 
@@ -212,6 +238,8 @@ require_once STOREFLEET_PATH .
 
 require_once STOREFLEET_PATH .
     'includes/delivery/delivery-dashboard.php';
+
+
 /*
 |--------------------------------------------------------------------------
 | Inventory
@@ -240,6 +268,7 @@ require_once STOREFLEET_PATH .
 
 require_once STOREFLEET_PATH .
     'includes/products/dokan-product-branches.php';
+
 
 /*
 |--------------------------------------------------------------------------

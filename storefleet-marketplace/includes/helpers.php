@@ -11,6 +11,13 @@ function storefleet_branches_table()
     return $wpdb->prefix . 'storefleet_branches';
 }
 
+function storefleet_branch_hours_table()
+{
+    global $wpdb;
+
+    return $wpdb->prefix . 'storefleet_branch_hours';
+}
+
 function storefleet_staff_table()
 {
     global $wpdb;
