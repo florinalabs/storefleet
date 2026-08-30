@@ -35,7 +35,9 @@ function storefleet_get_merchant_branches(
                 FROM {$table}
                 WHERE merchant_id = %d
                 AND is_active = 1
-                ORDER BY name ASC
+                ORDER BY
+                    is_primary DESC,
+                    name ASC
                 ",
                 $merchant_id
             )
@@ -49,6 +51,7 @@ function storefleet_get_merchant_branches(
             FROM {$table}
             WHERE merchant_id = %d
             ORDER BY
+                is_primary DESC,
                 is_active DESC,
                 name ASC
             ",
@@ -89,6 +92,312 @@ function storefleet_get_branch(
             ",
             $branch_id
         )
+    );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Merchant Primary Branch
+|--------------------------------------------------------------------------
+*/
+
+function storefleet_get_primary_branch(
+    $merchant_id,
+    $active_only = true
+) {
+    global $wpdb;
+
+
+    $merchant_id =
+        absint(
+            $merchant_id
+        );
+
+
+    if (!$merchant_id) {
+        return null;
+    }
+
+
+    $table =
+        storefleet_branches_table();
+
+
+    $active_sql =
+        $active_only
+            ? 'AND is_active = 1'
+            : '';
+
+
+    return $wpdb->get_row(
+        $wpdb->prepare(
+            "
+            SELECT *
+            FROM {$table}
+            WHERE merchant_id = %d
+            AND is_primary = 1
+            {$active_sql}
+            ORDER BY id ASC
+            LIMIT 1
+            ",
+            $merchant_id
+        )
+    );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Branch Is Primary
+|--------------------------------------------------------------------------
+*/
+
+function storefleet_branch_is_primary(
+    $branch
+) {
+    if (
+        is_numeric(
+            $branch
+        )
+    ) {
+        $branch =
+            storefleet_get_branch(
+                absint(
+                    $branch
+                )
+            );
+    }
+
+
+    return
+        is_object(
+            $branch
+        )
+        &&
+        isset(
+            $branch->is_primary
+        )
+        &&
+        (int)
+        $branch->is_primary === 1;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Set Merchant Primary Branch
+|--------------------------------------------------------------------------
+|
+| The selected branch must:
+|
+| - belong to the merchant
+| - be active
+|
+| One UPDATE statement clears the previous primary flag and promotes the
+| selected branch, preventing two StoreFleet primary branches from being
+| intentionally persisted for the same merchant.
+|
+*/
+
+function storefleet_set_primary_branch(
+    $merchant_id,
+    $branch_id
+) {
+    global $wpdb;
+
+
+    $merchant_id =
+        absint(
+            $merchant_id
+        );
+
+
+    $branch_id =
+        absint(
+            $branch_id
+        );
+
+
+    if (
+        !$merchant_id ||
+        !$branch_id
+    ) {
+        return new WP_Error(
+            'storefleet_invalid_primary_branch',
+            'A valid merchant and branch are required.'
+        );
+    }
+
+
+    $branch =
+        storefleet_get_branch(
+            $branch_id
+        );
+
+
+    if (
+        !$branch ||
+        (int)
+        $branch->merchant_id !==
+        $merchant_id
+    ) {
+        return new WP_Error(
+            'storefleet_primary_branch_not_owned',
+            'The selected branch does not belong to this merchant.'
+        );
+    }
+
+
+    if (
+        (int)
+        $branch->is_active !== 1
+    ) {
+        return new WP_Error(
+            'storefleet_primary_branch_inactive',
+            'The primary branch must be active.'
+        );
+    }
+
+
+    $table =
+        storefleet_branches_table();
+
+
+    $result =
+        $wpdb->query(
+            $wpdb->prepare(
+                "
+                UPDATE {$table}
+                SET
+                    is_primary =
+                        CASE
+                            WHEN id = %d
+                                THEN 1
+                            ELSE 0
+                        END,
+                    updated_at =
+                        CASE
+                            WHEN id = %d
+                                THEN %s
+                            ELSE updated_at
+                        END
+                WHERE merchant_id = %d
+                ",
+                $branch_id,
+                $branch_id,
+                current_time(
+                    'mysql'
+                ),
+                $merchant_id
+            )
+        );
+
+
+    if ($result === false) {
+        return new WP_Error(
+            'storefleet_primary_branch_update_failed',
+            'The primary branch could not be updated.'
+        );
+    }
+
+
+    do_action(
+        'storefleet_primary_branch_changed',
+        $merchant_id,
+        $branch_id,
+        $branch
+    );
+
+
+    return true;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Ensure Merchant Has Primary Branch
+|--------------------------------------------------------------------------
+|
+| Used by branch creation / repair flows.
+|
+| Existing active primary branch is kept. When none exists, StoreFleet
+| promotes the merchant's oldest active branch.
+|
+*/
+
+function storefleet_ensure_merchant_primary_branch(
+    $merchant_id
+) {
+    global $wpdb;
+
+
+    $merchant_id =
+        absint(
+            $merchant_id
+        );
+
+
+    if (!$merchant_id) {
+        return null;
+    }
+
+
+    $primary =
+        storefleet_get_primary_branch(
+            $merchant_id,
+            true
+        );
+
+
+    if ($primary) {
+        return $primary;
+    }
+
+
+    $table =
+        storefleet_branches_table();
+
+
+    $branch_id =
+        absint(
+            $wpdb->get_var(
+                $wpdb->prepare(
+                    "
+                    SELECT id
+                    FROM {$table}
+                    WHERE merchant_id = %d
+                    AND is_active = 1
+                    ORDER BY
+                        created_at ASC,
+                        id ASC
+                    LIMIT 1
+                    ",
+                    $merchant_id
+                )
+            )
+        );
+
+
+    if (!$branch_id) {
+        return null;
+    }
+
+
+    $result =
+        storefleet_set_primary_branch(
+            $merchant_id,
+            $branch_id
+        );
+
+
+    if (is_wp_error($result)) {
+        return $result;
+    }
+
+
+    return storefleet_get_branch(
+        $branch_id
     );
 }
 

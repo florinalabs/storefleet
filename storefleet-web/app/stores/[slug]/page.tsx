@@ -2,84 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import storesData from "@/data/stores.json";
-import productsData from "@/data/products.json";
-
-
-type Store = {
-  id: number;
-  slug: string;
-  name: string;
-
-  description: string;
-
-  category: string;
-  categorySlug: string;
-
-  city: string;
-  province: string;
-
-  verified: boolean;
-
-  rating: number;
-  reviewCount: number;
-  orderCount: number;
-  productCount: number;
-
-  image: string;
-};
-
-
-type ProductStore = {
-  id: number;
-  name: string;
-  slug: string;
-  verified: boolean;
-};
-
-
-type Product = {
-  id: number;
-  slug: string;
-  name: string;
-
-  category: string;
-  categorySlug: string;
-
-  price: number;
-  regularPrice: number;
-  currency: string;
-
-  image: string;
-
-  rating: number;
-  reviewCount: number;
-  orderCount: number;
-
-  stock: number;
-
-  store: ProductStore;
-};
-
-
-const stores =
-  storesData as Store[];
-
-const products =
-  productsData as Product[];
-
-
-/*
-|--------------------------------------------------------------------------
-| Static Params
-|--------------------------------------------------------------------------
-*/
-
-export function generateStaticParams() {
-  return stores.map((store) => ({
-    slug: store.slug,
-  }));
-}
+import StoreBranchSelector from "@/components/store-branch-selector";
+import {
+  getStoreBySlug,
+  getStoreProducts,
+  type PublicProduct,
+} from "@/lib/storefleet-api";
 
 
 /*
@@ -98,22 +26,28 @@ export async function generateMetadata({
   const { slug } =
     await params;
 
-  const store =
-    stores.find(
-      (item) =>
-        item.slug === slug
+  const response =
+    await getStoreBySlug(
+      slug
     );
 
-  if (!store) {
+  if (!response) {
     return {
       title: "Store Not Found",
     };
   }
 
+  const {
+    store,
+  } = response;
+
   return {
     title: store.name,
     description:
-      store.description,
+      stripHtml(
+        store.description
+      ) ||
+      `Shop ${store.name} on StoreFleet.`,
   };
 }
 
@@ -126,33 +60,121 @@ export async function generateMetadata({
 
 export default async function StorePage({
   params,
+  searchParams,
 }: {
   params: Promise<{
     slug: string;
   }>;
+
+  searchParams: Promise<{
+    branch?: string | string[];
+  }>;
 }) {
-  const { slug } =
+  const {
+    slug,
+  } =
     await params;
 
 
-  const store =
-    stores.find(
-      (item) =>
-        item.slug === slug
+  const query =
+    await searchParams;
+
+
+  const response =
+    await getStoreBySlug(
+      slug
     );
 
 
-  if (!store) {
+  if (!response) {
     notFound();
   }
 
 
+  const {
+    store,
+    branches,
+  } = response;
+
+
+  const openBranchCount =
+    branches.filter(
+      (branch) =>
+        branch.is_open_now
+    ).length;
+
+
+  const primaryBranch =
+    branches.find(
+      (branch) =>
+        branch.id ===
+        store.primary_branch_id
+    ) ??
+    branches[0] ??
+    null;
+
+
+  const rawBranch =
+    Array.isArray(
+      query.branch
+    )
+      ? query.branch[0]
+      : query.branch;
+
+
+  const requestedBranchId =
+    rawBranch
+      ? Number.parseInt(
+          rawBranch,
+          10
+        )
+      : 0;
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Branch Selection
+  |--------------------------------------------------------------------------
+  |
+  | One active branch:
+  | - automatically use it
+  | - hide branch chooser
+  | - load products immediately
+  |
+  | Multiple active branches:
+  | - use ?branch=ID when selected
+  | - otherwise use primary branch
+  |
+  */
+
+  const selectedBranch =
+    branches.length === 1
+      ? branches[0]
+      : branches.find(
+          (branch) =>
+            branch.id ===
+            requestedBranchId
+        ) ??
+        primaryBranch;
+
+
+  const showBranchChooser =
+    branches.length > 1;
+
+
+  const productsResponse =
+    selectedBranch
+      ? await getStoreProducts(
+          store.slug,
+          selectedBranch.id
+        )
+      : null;
+
+
   const storeProducts =
-    products.filter(
-      (product) =>
-        product.store.slug ===
-        store.slug
-    );
+    productsResponse
+      ?.products ??
+    [];
 
 
   return (
@@ -162,9 +184,18 @@ export default async function StorePage({
 
       <section className="bg-zinc-950 text-white">
 
-        <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
+        {store.banner_url && (
+          <div className="h-48 w-full overflow-hidden border-b border-white/10 sm:h-64 lg:h-72">
+            <img
+              src={store.banner_url}
+              alt=""
+              className="h-full w-full object-cover opacity-80"
+            />
+          </div>
+        )}
 
-          {/* Breadcrumb */}
+
+        <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
 
           <div className="mb-8 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
 
@@ -193,105 +224,106 @@ export default async function StorePage({
           </div>
 
 
-          <div className="grid gap-8 lg:grid-cols-[360px_1fr] lg:items-center">
+          <div className="grid gap-8 lg:grid-cols-[180px_1fr] lg:items-center">
 
-            {/* Image */}
+            <div className="aspect-square overflow-hidden rounded-3xl border border-white/10 bg-zinc-800">
 
-            <div className="aspect-[16/10] overflow-hidden rounded-3xl bg-zinc-800">
-
-              <img
-                src={store.image}
-                alt={store.name}
-                className="h-full w-full object-cover"
-              />
+              {store.logo_url ? (
+                <img
+                  src={store.logo_url}
+                  alt={store.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-5xl font-black text-zinc-500">
+                  {store.name
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+              )}
 
             </div>
 
 
-            {/* Store Details */}
-
             <div>
 
               <span className="inline-flex rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-zinc-200">
-                {store.category}
+                StoreFleet Merchant
               </span>
 
 
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-
-                <h1 className="text-4xl font-black leading-none tracking-[-0.055em] sm:text-5xl lg:text-6xl">
-                  {store.name}
-                </h1>
-
-                {store.verified && (
-                  <VerifiedBadge />
-                )}
-
-              </div>
+              <h1 className="mt-5 text-4xl font-black leading-none tracking-[-0.055em] sm:text-5xl lg:text-6xl">
+                {store.name}
+              </h1>
 
 
-              {store.verified && (
-
-                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-violet-500/15 px-3 py-1.5 text-sm font-bold text-violet-200">
-
-                  <VerifiedBadge small />
-
-                  StoreFleet Verified
-
-                </div>
-
+              {store.description ? (
+                <div
+                  className="mt-6 max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg"
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      store.description,
+                  }}
+                />
+              ) : (
+                <p className="mt-6 max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg">
+                  Shop products from{" "}
+                  {store.name} on StoreFleet.
+                </p>
               )}
 
 
-              <p className="mt-6 max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg">
-                {store.description}
-              </p>
+              {store.address.formatted && (
+                <div className="mt-6 flex items-start gap-2 text-sm text-zinc-300">
+
+                  <LocationIcon />
+
+                  <span>
+                    {
+                      store.address
+                        .formatted
+                    }
+                  </span>
+
+                </div>
+              )}
 
 
-              {/* Location */}
+              <div className="mt-8 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-2xl bg-white/10 sm:grid-cols-4">
 
-              <div className="mt-6 flex items-center gap-2 text-sm text-zinc-300">
+                <StoreStat
+                  value={String(
+                    store.branch_count
+                  )}
+                  label={
+                    store.branch_count ===
+                    1
+                      ? "Branch"
+                      : "Branches"
+                  }
+                />
 
-                <LocationIcon />
+                <StoreStat
+                  value={String(
+                    openBranchCount
+                  )}
+                  label="Open now"
+                />
 
-                {store.city},{" "}
-                {store.province}
-
-              </div>
-
-
-              {/* Stats */}
-
-              <div className="mt-8 grid max-w-2xl grid-cols-2 gap-px overflow-hidden rounded-2xl bg-white/10 sm:grid-cols-4">
+                <StoreStat
+                  value={formatNumber(
+                    storeProducts.length
+                  )}
+                  label="Products"
+                />
 
                 <StoreStat
                   value={
-                    store.rating.toFixed(
-                      1
-                    ) + " ★"
+                    selectedBranch
+                      ? selectedBranch.name
+                      : "—"
                   }
-                  label="Rating"
-                />
-
-                <StoreStat
-                  value={formatNumber(
-                    store.reviewCount
-                  )}
-                  label="Reviews"
-                />
-
-                <StoreStat
-                  value={formatNumber(
-                    store.orderCount
-                  )}
-                  label="Orders"
-                />
-
-                <StoreStat
-                  value={formatNumber(
-                    store.productCount
-                  )}
-                  label="Products"
+                  label="Selected branch"
                 />
 
               </div>
@@ -311,9 +343,22 @@ export default async function StorePage({
 
         <div className="mx-auto flex w-full max-w-7xl gap-8 overflow-x-auto px-5 sm:px-6 lg:px-8">
 
+          {showBranchChooser && (
+            <a
+              href="#branches"
+              className="border-b-2 border-violet-600 py-5 text-sm font-bold text-violet-600"
+            >
+              Branches
+            </a>
+          )}
+
           <a
             href="#products"
-            className="border-b-2 border-violet-600 py-5 text-sm font-bold text-violet-600"
+            className={`py-5 text-sm font-bold ${
+              showBranchChooser
+                ? "text-zinc-500 transition hover:text-zinc-950"
+                : "border-b-2 border-violet-600 text-violet-600"
+            }`}
           >
             Products
           </a>
@@ -325,16 +370,62 @@ export default async function StorePage({
             About
           </a>
 
-          <a
-            href="#reviews"
-            className="py-5 text-sm font-semibold text-zinc-500 transition hover:text-zinc-950"
-          >
-            Reviews
-          </a>
-
         </div>
 
       </section>
+
+
+      {/* Multiple Branches Only */}
+
+      {showBranchChooser && (
+        <section
+          id="branches"
+          className="scroll-mt-32 border-b border-zinc-200 bg-zinc-50 py-12 sm:py-16"
+        >
+
+          <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
+
+            <span className="text-xs font-black uppercase tracking-[0.15em] text-violet-600">
+              Choose a location
+            </span>
+
+            <div className="mt-3 mb-8 flex flex-wrap items-end justify-between gap-5">
+
+              <div>
+
+                <h2 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+                  Store branches
+                </h2>
+
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
+                  Select a branch. StoreFleet will then load the products and stock for that location.
+                </p>
+
+              </div>
+
+              <span className="text-sm text-zinc-500">
+                {branches.length} active branches
+              </span>
+
+            </div>
+
+
+            <StoreBranchSelector
+              branches={branches}
+              selectedBranchId={
+                selectedBranch
+                  ?.id ??
+                null
+              }
+              storeSlug={
+                store.slug
+              }
+            />
+
+          </div>
+
+        </section>
+      )}
 
 
       {/* Products */}
@@ -346,7 +437,7 @@ export default async function StorePage({
 
         <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
 
-          <div className="mb-8 flex items-end justify-between gap-6">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
 
             <div>
 
@@ -357,6 +448,15 @@ export default async function StorePage({
               <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
                 Shop {store.name}
               </h2>
+
+              {selectedBranch && (
+                <p className="mt-2 text-sm text-zinc-500">
+                  Available from{" "}
+                  <strong className="text-zinc-700">
+                    {selectedBranch.name}
+                  </strong>
+                </p>
+              )}
 
             </div>
 
@@ -371,7 +471,21 @@ export default async function StorePage({
           </div>
 
 
-          {storeProducts.length > 0 ? (
+          {!selectedBranch ? (
+
+            <div className="rounded-3xl border border-dashed border-zinc-300 py-20 text-center">
+
+              <h3 className="text-xl font-black">
+                No active branch.
+              </h3>
+
+              <p className="mt-2 text-zinc-500">
+                Products are unavailable until this store has an active branch.
+              </p>
+
+            </div>
+
+          ) : storeProducts.length > 0 ? (
 
             <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
 
@@ -393,12 +507,12 @@ export default async function StorePage({
             <div className="rounded-3xl border border-dashed border-zinc-300 py-20 text-center">
 
               <h3 className="text-xl font-black">
-                No products yet.
+                No products available.
               </h3>
 
               <p className="mt-2 text-zinc-500">
-                This store has not listed
-                products yet.
+                There are no products available at{" "}
+                {selectedBranch.name}.
               </p>
 
             </div>
@@ -429,9 +543,24 @@ export default async function StorePage({
               {store.name}
             </h2>
 
-            <p className="mt-5 max-w-3xl leading-8 text-zinc-600">
-              {store.description}
-            </p>
+            {store.description ? (
+              <div
+                className="mt-5 max-w-3xl leading-8 text-zinc-600"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    store.description,
+                }}
+              />
+            ) : (
+              <p className="mt-5 max-w-3xl leading-8 text-zinc-600">
+                {store.name} is available on StoreFleet with{" "}
+                {store.branch_count} active{" "}
+                {store.branch_count ===
+                1
+                  ? "branch"
+                  : "branches"}.
+              </p>
+            )}
 
           </div>
 
@@ -445,93 +574,35 @@ export default async function StorePage({
             <div className="mt-6 space-y-5">
 
               <InfoRow
-                label="Category"
-                value={store.category}
+                label="Store"
+                value={store.name}
               />
 
               <InfoRow
-                label="Location"
-                value={`${store.city}, ${store.province}`}
-              />
-
-              <InfoRow
-                label="Status"
+                label="Address"
                 value={
-                  store.verified
-                    ? "StoreFleet Verified"
-                    : "StoreFleet Merchant"
+                  store.address
+                    .formatted ||
+                  "Not provided"
                 }
               />
 
               <InfoRow
-                label="Products"
-                value={`${store.productCount} products`}
+                label="Phone"
+                value={
+                  store.phone ||
+                  "Not provided"
+                }
               />
 
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* Reviews */}
-
-      <section
-        id="reviews"
-        className="scroll-mt-32 border-t border-zinc-200 py-16"
-      >
-
-        <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
-
-          <span className="text-xs font-black uppercase tracking-[0.15em] text-violet-600">
-            Customer feedback
-          </span>
-
-          <h2 className="mt-4 text-3xl font-black tracking-[-0.04em]">
-            Store reviews
-          </h2>
-
-
-          <div className="mt-8 grid gap-6 lg:grid-cols-[280px_1fr]">
-
-            <div className="rounded-3xl bg-zinc-950 p-8 text-white">
-
-              <div className="text-5xl font-black">
-                {store.rating.toFixed(
-                  1
-                )}
-              </div>
-
-              <div className="mt-3 text-xl tracking-widest text-amber-400">
-                ★★★★★
-              </div>
-
-              <div className="mt-3 text-sm text-zinc-400">
-                Based on{" "}
-                {formatNumber(
-                  store.reviewCount
-                )}{" "}
-                reviews
-              </div>
-
-            </div>
-
-
-            <div className="grid gap-4 md:grid-cols-2">
-
-              <ReviewCard
-                name="Maria S."
-                rating={5}
-                text={`Great experience ordering from ${store.name}. Products arrived in excellent condition.`}
+              <InfoRow
+                label="Branches"
+                value={`${store.branch_count} active`}
               />
 
-              <ReviewCard
-                name="John R."
-                rating={5}
-                text="Fast service, good product quality and a smooth StoreFleet ordering experience."
+              <InfoRow
+                label="Products at selected branch"
+                value={`${storeProducts.length} products`}
               />
 
             </div>
@@ -556,42 +627,49 @@ export default async function StorePage({
 function ProductCard({
   product,
 }: {
-  product: Product;
+  product: PublicProduct;
 }) {
   const hasDiscount =
-    product.regularPrice >
+    product.regular_price >
     product.price;
+
+
+  const category =
+    product.categories[0]
+      ?.name ??
+    "Product";
+
 
   return (
     <article className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white transition hover:-translate-y-1 hover:shadow-xl hover:shadow-zinc-950/5">
-
-      {/* Product Image */}
 
       <Link
         href={`/shop/${product.slug}`}
         className="block aspect-square overflow-hidden bg-zinc-100"
       >
-        <img
-          src={product.image}
-          alt={product.name}
-          loading="lazy"
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
-        />
+
+        {product.image_url ? (
+          <img
+            src={product.image_url}
+            alt={product.name}
+            loading="lazy"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold text-zinc-400">
+            No product image
+          </div>
+        )}
+
       </Link>
 
 
-      {/* Product Content */}
-
       <div className="p-4">
 
-        {/* Category */}
-
         <span className="text-xs font-semibold text-zinc-400">
-          {product.category}
+          {category}
         </span>
 
-
-        {/* Product Name */}
 
         <Link
           href={`/shop/${product.slug}`}
@@ -602,54 +680,20 @@ function ProductCard({
         </Link>
 
 
-        {/* Rating / Reviews / Orders */}
-
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-
-          <span className="text-amber-400">
-            ★
-          </span>
-
-          <strong>
-            {product.rating.toFixed(1)}
-          </strong>
-
-          <span className="text-zinc-400">
-            (
-            {formatNumber(
-              product.reviewCount
-            )}
-            )
-          </span>
-
-          <span className="text-zinc-300">
-            |
-          </span>
-
-          <span className="text-zinc-500">
-            {formatNumber(
-              product.orderCount
-            )}{" "}
-            sold
-          </span>
-
-        </div>
-
-
-        {/* Price */}
-
         <div className="mt-4 flex flex-wrap items-baseline gap-2">
 
           <strong className="text-lg font-black text-violet-700">
             {formatPrice(
-              product.price
+              product.price,
+              product.currency
             )}
           </strong>
 
           {hasDiscount && (
             <span className="text-xs text-zinc-400 line-through">
               {formatPrice(
-                product.regularPrice
+                product.regular_price,
+                product.currency
               )}
             </span>
           )}
@@ -657,16 +701,22 @@ function ProductCard({
         </div>
 
 
-        {/* Stock */}
-
-        {product.stock <= 20 &&
-          product.stock > 0 && (
+        {product.stock_quantity !==
+          null &&
+          product.stock_quantity > 0 &&
+          product.stock_quantity <=
+            20 && (
             <div className="mt-3 text-xs font-semibold text-orange-600">
-              Only {product.stock} left
+              Only{" "}
+              {formatNumber(
+                product.stock_quantity
+              )}{" "}
+              left
             </div>
           )}
 
-        {product.stock === 0 && (
+
+        {!product.in_stock && (
           <div className="mt-3 text-xs font-semibold text-red-600">
             Out of stock
           </div>
@@ -685,26 +735,6 @@ function ProductCard({
 |--------------------------------------------------------------------------
 */
 
-function VerifiedBadge({
-  small = false,
-}: {
-  small?: boolean;
-}) {
-  return (
-    <span
-      title="StoreFleet Verified"
-      className={`inline-flex shrink-0 items-center justify-center rounded-full bg-violet-600 font-black text-white ${
-        small
-          ? "h-4 w-4 text-[9px]"
-          : "h-6 w-6 text-xs"
-      }`}
-    >
-      ✓
-    </span>
-  );
-}
-
-
 function StoreStat({
   value,
   label,
@@ -715,7 +745,7 @@ function StoreStat({
   return (
     <div className="bg-white/5 p-5">
 
-      <strong className="block text-xl font-black">
+      <strong className="block truncate text-xl font-black">
         {value}
       </strong>
 
@@ -742,37 +772,8 @@ function InfoRow({
         {label}
       </span>
 
-      <strong className="text-right text-sm">
+      <strong className="max-w-[70%] text-right text-sm">
         {value}
-      </strong>
-
-    </div>
-  );
-}
-
-
-function ReviewCard({
-  name,
-  rating,
-  text,
-}: {
-  name: string;
-  rating: number;
-  text: string;
-}) {
-  return (
-    <div className="rounded-3xl border border-zinc-200 p-6">
-
-      <div className="text-amber-400">
-        {"★".repeat(rating)}
-      </div>
-
-      <p className="mt-4 leading-7 text-zinc-600">
-        {text}
-      </p>
-
-      <strong className="mt-5 block text-sm">
-        {name}
       </strong>
 
     </div>
@@ -787,7 +788,7 @@ function LocationIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      className="h-4 w-4 shrink-0"
+      className="mt-0.5 h-4 w-4 shrink-0"
     >
       <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
 
@@ -802,13 +803,16 @@ function LocationIcon() {
 
 
 function formatPrice(
-  value: number
+  value: number,
+  currency: string
 ) {
   return new Intl.NumberFormat(
     "en-PH",
     {
       style: "currency",
-      currency: "PHP",
+      currency:
+        currency ||
+        "PHP",
       minimumFractionDigits: 0,
     }
   ).format(value);
@@ -829,4 +833,14 @@ function formatNumber(
       maximumFractionDigits: 1,
     }
   ).format(value);
+}
+
+
+function stripHtml(
+  value: string
+) {
+  return value.replace(
+    /<[^>]*>/g,
+    ""
+  );
 }
